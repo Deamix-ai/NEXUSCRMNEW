@@ -1,0 +1,1264 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE CRM ENTITIES
+// ============================================================================
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String?
+  firstName         String
+  lastName          String
+  phone             String?
+  role              UserRole @default(SALES)
+  isActive          Boolean  @default(true)
+  lastLoginAt       DateTime?
+  emailVerifiedAt   DateTime?
+  twoFactorSecret   String?
+  twoFactorEnabled  Boolean  @default(false)
+  avatarUrl         String?
+  timezone          String   @default("Europe/London")
+  preferences       Json     @default("{}")
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?
+  updatedById       String?
+  
+  // Relations
+  createdBy         User?     @relation("UserCreatedBy", fields: [createdById], references: [id])
+  updatedBy         User?     @relation("UserUpdatedBy", fields: [updatedById], references: [id])
+  createdUsers      User[]    @relation("UserCreatedBy")
+  updatedUsers      User[]    @relation("UserUpdatedBy")
+  
+  ownedClients      Client[]  @relation("ClientOwner")
+  ownedLeads        Lead[]    @relation("LeadOwner")
+  ownedDeals        Deal[]    @relation("DealOwner")
+  assignedTasks     Task[]    @relation("TaskAssignee")
+  createdTasks      Task[]    @relation("TaskCreator")
+  activities        Activity[]
+  appointments      Appointment[]
+  jobDayLogs        JobDayLog[]
+  designVersions    DesignVersion[]
+  
+  // Additional relations
+  createdClients       Client[]            @relation("ClientCreatedBy")
+  updatedClients       Client[]            @relation("ClientUpdatedBy")
+  designerJobs         Job[]               @relation("JobDesigner")
+  installerCompanies   InstallerCompany[]  @relation("InstallerCompanyOwner")
+  clashReports         DesignClashTicket[] @relation("ClashReporter")
+  clashAssignments     DesignClashTicket[] @relation("ClashAssignee")
+  moodboardComments    MoodboardComment[]  @relation("CommentAuthor")
+  snagReports          Snag[]              @relation("SnagReporter")
+  snagAssignments      Snag[]              @relation("SnagAssignee")
+  uploadedDocuments    Document[]          @relation("DocumentUploader")
+  formSubmissions      FormSubmission[]    @relation("FormSubmitter")
+  eventLogs            EventLog[]          @relation("EventLogUser")
+  mergeReviews         MergeQueue[]        @relation("MergeReviewer")
+  
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SALES
+  DESIGNER
+  FIELD
+  INSTALLER_COMPANY_OWNER
+  READ_ONLY
+}
+
+model Client {
+  id                String   @id @default(cuid())
+  companyName       String?
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  mobile            String?
+  addressLine1      String?
+  addressLine2      String?
+  city              String?
+  county            String?
+  postcode          String?
+  country           String   @default("GB")
+  
+  // Client specific fields
+  clientType        ClientType @default(RESIDENTIAL)
+  leadSource        String?
+  referralSource    String?
+  
+  // Portal access
+  portalKey         String?  @unique
+  portalLastAccessAt DateTime?
+  
+  // Privacy & Consent
+  marketingConsent  Boolean  @default(false)
+  marketingConsentDate DateTime?
+  emailConsent      Boolean  @default(true)
+  smsConsent        Boolean  @default(false)
+  callRecordingConsent Boolean @default(false)
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?
+  updatedById       String?
+  ownerId           String
+  
+  // Relations
+  createdBy         User?     @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  updatedBy         User?     @relation("ClientUpdatedBy", fields: [updatedById], references: [id])
+  owner             User      @relation("ClientOwner", fields: [ownerId], references: [id])
+  
+  contacts          Contact[]
+  leads             Lead[]
+  deals             Deal[]
+  rooms             Room[]
+  jobs              Job[]
+  activities        Activity[]
+  documents         Document[]
+  appointments      Appointment[]
+  moodboards        Moodboard[]
+  
+  @@map("clients")
+}
+
+enum ClientType {
+  RESIDENTIAL
+  COMMERCIAL
+  TRADE
+}
+
+model Contact {
+  id                String   @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  mobile            String?
+  jobTitle          String?
+  isPrimary         Boolean  @default(false)
+  
+  // Relations
+  clientId          String
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?
+  updatedById       String?
+  
+  activities        Activity[]
+  
+  @@map("contacts")
+}
+
+model Lead {
+  id                String     @id @default(cuid())
+  title             String
+  description       String?
+  status            LeadStatus @default(NEW)
+  priority          Priority   @default(MEDIUM)
+  estimatedValue    Decimal?   @db.Decimal(10,2)
+  probability       Int        @default(50) // 0-100%
+  expectedCloseDate DateTime?
+  
+  // Lead source tracking
+  source            String?
+  campaign          String?
+  medium            String?
+  
+  // First response SLA
+  firstResponseAt   DateTime?
+  responseTime      Int? // minutes
+  
+  // Relations
+  clientId          String
+  client            Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  ownerId           String
+  owner             User       @relation("LeadOwner", fields: [ownerId], references: [id])
+  
+  // Conversion
+  dealId            String?    @unique
+  deal              Deal?      @relation(fields: [dealId], references: [id])
+  
+  // Audit fields
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  createdById       String?
+  updatedById       String?
+  
+  activities        Activity[]
+  tasks             Task[]
+  
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  NEGOTIATING
+  WON
+  LOST
+  NURTURING
+}
+
+model Deal {
+  id                String       @id @default(cuid())
+  title             String
+  description       String?
+  value             Decimal      @db.Decimal(10,2)
+  probability       Int          @default(50) // 0-100%
+  expectedCloseDate DateTime?
+  actualCloseDate   DateTime?
+  
+  // Pipeline
+  stageId           String
+  stage             PipelineStage @relation(fields: [stageId], references: [id])
+  
+  // Relations
+  clientId          String
+  client            Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  ownerId           String
+  owner             User         @relation("DealOwner", fields: [ownerId], references: [id])
+  
+  // Conversion from lead
+  lead              Lead?
+  
+  // Linked job
+  jobId             String?      @unique
+  job               Job?         @relation(fields: [jobId], references: [id])
+  
+  // Audit fields
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  createdById       String?
+  updatedById       String?
+  
+  activities        Activity[]
+  tasks             Task[]
+  documents         Document[]
+  
+  @@map("deals")
+}
+
+model PipelineStage {
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  order             Int
+  probability       Int      @default(50) // Default probability for deals in this stage
+  isClosedWon       Boolean  @default(false)
+  isClosedLost      Boolean  @default(false)
+  
+  // Automation settings
+  autoTasks         Json     @default("[]") // Array of task templates to create
+  autoEmails        Json     @default("[]") // Array of email templates to send
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  deals             Deal[]
+  
+  @@map("pipeline_stages")
+}
+
+model Activity {
+  id                String       @id @default(cuid())
+  type              ActivityType
+  title             String
+  description       String?
+  direction         Direction?   // For calls/emails
+  duration          Int?         // For calls (seconds)
+  outcome           String?
+  
+  // Participants
+  userId            String
+  user              User         @relation(fields: [userId], references: [id])
+  clientId          String?
+  client            Client?      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contactId         String?
+  contact           Contact?     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  leadId            String?
+  lead              Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  dealId            String?
+  deal              Deal?        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  
+  // External references
+  emailMessageId    String?      // For email threading
+  callRecordingUrl  String?
+  
+  // Metadata
+  metadata          Json         @default("{}")
+  
+  // Audit fields
+  createdAt         DateTime     @default(now())
+  scheduledAt       DateTime?
+  completedAt       DateTime?
+  
+  @@map("activities")
+}
+
+enum ActivityType {
+  CALL
+  EMAIL
+  SMS
+  MEETING
+  NOTE
+  TASK
+  DOCUMENT_UPLOAD
+  PORTAL_ACCESS
+  SURVEY_SUBMITTED
+  DESIGN_VIEWED
+  PAYMENT_RECEIVED
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+model Task {
+  id                String     @id @default(cuid())
+  title             String
+  description       String?
+  status            TaskStatus @default(PENDING)
+  priority          Priority   @default(MEDIUM)
+  dueDate           DateTime?
+  completedAt       DateTime?
+  
+  // Assignment
+  assigneeId        String
+  assignee          User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById       String
+  createdBy         User       @relation("TaskCreator", fields: [createdById], references: [id])
+  
+  // Relations
+  clientId          String?
+  leadId            String?
+  lead              Lead?      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  dealId            String?
+  deal              Deal?      @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  jobId             String?
+  job               Job?       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Appointment {
+  id                String            @id @default(cuid())
+  title             String
+  description       String?
+  startTime         DateTime
+  endTime           DateTime
+  location          String?
+  meetingUrl        String?
+  status            AppointmentStatus @default(SCHEDULED)
+  
+  // Participants
+  userId            String
+  user              User              @relation(fields: [userId], references: [id])
+  clientId          String
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  jobId             String?
+  job               Job?              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // Calendar integration
+  outlookEventId    String?
+  calendarSynced    Boolean           @default(false)
+  
+  // Audit fields
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+// ============================================================================
+// BATHROOM-SPECIFIC ENTITIES
+// ============================================================================
+
+model Room {
+  id                String   @id @default(cuid())
+  name              String   // e.g., "Main Bathroom", "En-suite", "Downstairs WC"
+  type              RoomType
+  
+  // Measurements (in mm)
+  length            Int?
+  width             Int?
+  height            Int?
+  
+  // Current condition
+  currentCondition  String?
+  accessNotes       String?
+  
+  // Relations
+  clientId          String
+  client            Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  
+  jobs              Job[]
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("rooms")
+}
+
+enum RoomType {
+  BATHROOM
+  EN_SUITE
+  WC
+  WETROOM
+  SHOWER_ROOM
+  UTILITY
+}
+
+model Job {
+  id                String     @id @default(cuid())
+  jobNumber         String     @unique
+  title             String
+  description       String?
+  status            JobStatus  @default(QUOTED)
+  
+  // Dates
+  quotedDate        DateTime?
+  surveyDate        DateTime?
+  designDate        DateTime?
+  startDate         DateTime?
+  expectedEndDate   DateTime?
+  actualEndDate     DateTime?
+  
+  // Financial
+  quotedValue       Decimal?   @db.Decimal(10,2)
+  finalValue        Decimal?   @db.Decimal(10,2)
+  depositAmount     Decimal?   @db.Decimal(10,2)
+  depositPaid       Boolean    @default(false)
+  designFeePaid     Boolean    @default(false)
+  balancePaid       Boolean    @default(false)
+  
+  // Relations
+  clientId          String
+  client            Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  roomId            String
+  room              Room       @relation(fields: [roomId], references: [id])
+  dealId            String?    @unique
+  deal              Deal?
+  
+  // Installer assignment
+  installerCompanyId String?
+  installerCompany  InstallerCompany? @relation(fields: [installerCompanyId], references: [id])
+  
+  // Design
+  designerId        String?
+  designer          User?      @relation("JobDesigner", fields: [designerId], references: [id])
+  
+  // Audit fields
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  
+  tasks             Task[]
+  appointments      Appointment[]
+  jobDayLogs        JobDayLog[]
+  designVersions    DesignVersion[]
+  snags             Snag[]
+  documents         Document[]
+  parsedSpecItems   ParsedSpecItem[]
+  moodboards        Moodboard[]
+  handoverPacks     HandoverPack[]
+  
+  @@map("jobs")
+}
+
+enum JobStatus {
+  QUOTED
+  SURVEY_BOOKED
+  SURVEYED
+  DESIGNING
+  DESIGN_APPROVED
+  MATERIALS_ORDERED
+  SCHEDULED
+  IN_PROGRESS
+  SNAGGING
+  COMPLETED
+  CANCELLED
+}
+
+model JobDayLog {
+  id                String   @id @default(cuid())
+  date              DateTime @db.Date
+  
+  // Team present
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  jobId             String
+  job               Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // Times
+  startTime         DateTime?
+  endTime           DateTime?
+  lunchStart        DateTime?
+  lunchEnd          DateTime?
+  
+  // Check-in location (geofence validation)
+  checkInLatitude   Decimal? @db.Decimal(10,8)
+  checkInLongitude  Decimal? @db.Decimal(11,8)
+  checkInAddress    String?
+  
+  // Work summary
+  workCompleted     String?
+  materialsUsed     String?
+  issuesEncountered String?
+  
+  // Forms
+  startFormData     Json?    @default("{}")
+  dailyFormData     Json?    @default("{}")
+  endFormData       Json?    @default("{}")
+  
+  // Photos
+  photos            String[] // Array of S3 URLs
+  
+  // Compliance
+  isCompliant       Boolean  @default(true)
+  complianceNotes   String?
+  
+  // Sync status (for offline mobile)
+  syncStatus        SyncStatus @default(SYNCED)
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@unique([userId, jobId, date])
+  @@map("job_day_logs")
+}
+
+enum SyncStatus {
+  QUEUED
+  UPLOADING
+  RETRYING
+  SYNCED
+  ERROR
+}
+
+model InstallerCompany {
+  id                String   @id @default(cuid())
+  name              String
+  contactEmail      String
+  contactPhone      String
+  address           String?
+  
+  // Compliance documents
+  insuranceExpiry   DateTime?
+  dbsExpiry         DateTime?
+  contractSigned    Boolean  @default(false)
+  contractSignedAt  DateTime?
+  
+  // Status
+  isActive          Boolean  @default(true)
+  isSuspended       Boolean  @default(false)
+  suspensionReason  String?
+  
+  // Relations
+  ownerId           String?
+  owner             User?    @relation("InstallerCompanyOwner", fields: [ownerId], references: [id])
+  
+  teamMembers       InstallerTeamMember[]
+  jobs              Job[]
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("installer_companies")
+}
+
+model InstallerTeamMember {
+  id                String   @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  
+  // Compliance
+  dbsExpiry         DateTime?
+  isActive          Boolean  @default(true)
+  
+  // Relations
+  companyId         String
+  company           InstallerCompany @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("installer_team_members")
+}
+
+// ============================================================================
+// DESIGN & SPECIFICATION ENTITIES
+// ============================================================================
+
+model DesignVersion {
+  id                String         @id @default(cuid())
+  version           Int            @default(1)
+  title             String
+  description       String?
+  status            DesignStatus   @default(DRAFT)
+  
+  // Design files
+  renderUrls        String[]       // Array of S3 URLs
+  planUrls          String[]       // Array of S3 URLs
+  specSheetUrl      String?
+  
+  // Client interaction
+  isClientVisible   Boolean        @default(false)
+  clientViewedAt    DateTime?
+  clientApprovedAt  DateTime?
+  clientFeedback    String?
+  
+  // Relations
+  jobId             String
+  job               Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  designerId        String
+  designer          User           @relation(fields: [designerId], references: [id])
+  
+  // If this version is final/locked
+  isFinal           Boolean        @default(false)
+  lockedAt          DateTime?
+  
+  // Design clash handling
+  clashTickets      DesignClashTicket[]
+  
+  // Audit fields
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  @@map("design_versions")
+}
+
+enum DesignStatus {
+  DRAFT
+  REVIEW
+  CLIENT_REVIEW
+  APPROVED
+  FINAL
+  ARCHIVED
+}
+
+model DesignClashTicket {
+  id                String         @id @default(cuid())
+  title             String
+  description       String
+  status            ClashStatus    @default(OPEN)
+  priority          Priority       @default(MEDIUM)
+  
+  // Photo evidence
+  photoUrls         String[]
+  
+  // Resolution
+  resolution        String?
+  resolvedAt        DateTime?
+  
+  // Relations
+  designVersionId   String
+  designVersion     DesignVersion  @relation(fields: [designVersionId], references: [id], onDelete: Cascade)
+  reportedById      String
+  reportedBy        User           @relation("ClashReporter", fields: [reportedById], references: [id])
+  assignedToId      String?
+  assignedTo        User?          @relation("ClashAssignee", fields: [assignedToId], references: [id])
+  
+  // Audit fields
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  
+  @@map("design_clash_tickets")
+}
+
+enum ClashStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+model Moodboard {
+  id                String           @id @default(cuid())
+  title             String
+  description       String?
+  status            MoodboardStatus  @default(ACTIVE)
+  
+  // Relations
+  clientId          String
+  client            Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  jobId             String?
+  job               Job?             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  items             MoodboardItem[]
+  
+  // Client interaction
+  isClientVisible   Boolean          @default(false)
+  clientLastViewedAt DateTime?
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  @@map("moodboards")
+}
+
+enum MoodboardStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model MoodboardItem {
+  id                String           @id @default(cuid())
+  title             String?
+  description       String?
+  imageUrl          String
+  sourceUrl         String?
+  category          String?          // e.g., "tiles", "fixtures", "colors"
+  
+  // Positioning
+  order             Int              @default(0)
+  
+  // Client interaction
+  clientComments    MoodboardComment[]
+  
+  // Relations
+  moodboardId       String
+  moodboard         Moodboard        @relation(fields: [moodboardId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  @@map("moodboard_items")
+}
+
+model MoodboardComment {
+  id                String           @id @default(cuid())
+  content           String
+  xPosition         Float            // Percentage from left (0-100)
+  yPosition         Float            // Percentage from top (0-100)
+  
+  // Author (null for client comments)
+  authorId          String?
+  author            User?            @relation("CommentAuthor", fields: [authorId], references: [id])
+  authorName        String?          // For client comments
+  
+  // Relations
+  itemId            String
+  item              MoodboardItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  
+  @@map("moodboard_comments")
+}
+
+model ParsedSpecItem {
+  id                String           @id @default(cuid())
+  originalText      String
+  parsedCategory    String?
+  parsedBrand       String?
+  parsedModel       String?
+  parsedDescription String?
+  parsedQuantity    Int?
+  parsedPrice       Decimal?         @db.Decimal(10,2)
+  
+  // Tracking
+  status            SpecItemStatus   @default(PENDING)
+  notes             String?
+  substitution      String?
+  actualPrice       Decimal?         @db.Decimal(10,2)
+  
+  // Parse quality
+  parseConfidence   Float            // 0-1 score
+  requiresReview    Boolean          @default(false)
+  
+  // Relations
+  jobId             String
+  job               Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // PDF source
+  sourceDocumentId  String?
+  sourcePage        Int?
+  sourceLineNumber  Int?
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  @@map("parsed_spec_items")
+}
+
+enum SpecItemStatus {
+  PENDING
+  ORDERED
+  DELIVERED
+  INSTALLED
+  SUBSTITUTED
+  CANCELLED
+}
+
+model Snag {
+  id                String      @id @default(cuid())
+  title             String
+  description       String
+  category          SnagCategory
+  severity          Priority    @default(MEDIUM)
+  status            SnagStatus  @default(OPEN)
+  
+  // Photo evidence
+  photoUrls         String[]
+  
+  // Client visibility
+  isClientVisible   Boolean     @default(false)
+  clientNotified    Boolean     @default(false)
+  
+  // Resolution
+  resolution        String?
+  resolvedAt        DateTime?
+  
+  // Relations
+  jobId             String
+  job               Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reportedById      String
+  reportedBy        User        @relation("SnagReporter", fields: [reportedById], references: [id])
+  assignedToId      String?
+  assignedTo        User?       @relation("SnagAssignee", fields: [assignedToId], references: [id])
+  
+  // Audit fields
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  @@map("snags")
+}
+
+enum SnagCategory {
+  PLUMBING
+  ELECTRICAL
+  TILING
+  DECORATION
+  FITTING
+  CLEANING
+  OTHER
+}
+
+enum SnagStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  DEFERRED
+}
+
+// ============================================================================
+// DOCUMENT & TEMPLATE ENTITIES
+// ============================================================================
+
+model Document {
+  id                String         @id @default(cuid())
+  filename          String
+  originalFilename  String
+  mimeType          String
+  fileSize          Int
+  storageUrl        String
+  category          DocumentCategory
+  description       String?
+  
+  // Security
+  isPublic          Boolean        @default(false)
+  virusScanStatus   VirusScanStatus @default(PENDING)
+  virusScanResult   String?
+  
+  // Relations
+  clientId          String?
+  client            Client?        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dealId            String?
+  deal              Deal?          @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  jobId             String?
+  job               Job?           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime       @default(now())
+  uploadedById      String
+  uploadedBy        User           @relation("DocumentUploader", fields: [uploadedById], references: [id])
+  
+  @@map("documents")
+}
+
+enum DocumentCategory {
+  CONTRACT
+  INVOICE
+  QUOTE
+  DESIGN
+  PHOTO
+  SPECIFICATION
+  COMPLIANCE
+  HANDOVER
+  OTHER
+}
+
+enum VirusScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  ERROR
+}
+
+model FormTemplate {
+  id                String           @id @default(cuid())
+  name              String
+  description       String?
+  category          FormCategory
+  schema            Json             // JSON schema for form fields
+  isActive          Boolean          @default(true)
+  version           Int              @default(1)
+  
+  submissions       FormSubmission[]
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  @@map("form_templates")
+}
+
+enum FormCategory {
+  SURVEY
+  DAILY_LOG
+  START_WORK
+  END_WORK
+  DESIGN_BRIEF
+  CLIENT_FEEDBACK
+  COMPLIANCE_CHECK
+}
+
+model FormSubmission {
+  id                String       @id @default(cuid())
+  data              Json         // Form data
+  submissionSource  SubmissionSource @default(WEB)
+  
+  // Relations
+  templateId        String
+  template          FormTemplate @relation(fields: [templateId], references: [id])
+  submittedById     String?
+  submittedBy       User?        @relation("FormSubmitter", fields: [submittedById], references: [id])
+  
+  // Context
+  clientId          String?
+  jobId             String?
+  
+  // Audit fields
+  submittedAt       DateTime     @default(now())
+  
+  @@map("form_submissions")
+}
+
+enum SubmissionSource {
+  WEB
+  MOBILE
+  API
+}
+
+model HandoverPack {
+  id                String   @id @default(cuid())
+  title             String
+  description       String?
+  
+  // Contents
+  completionCertUrl String?
+  warrantyDocsUrls  String[] // Array of warranty document URLs
+  finalPhotosUrls   String[] // Curated final photos
+  guidesIncluded    String[] // Array of guide IDs/references
+  
+  // Delivery
+  isGenerated       Boolean  @default(false)
+  generatedAt       DateTime?
+  deliveredAt       DateTime?
+  clientAccessedAt  DateTime?
+  
+  // Relations
+  jobId             String   @unique
+  job               Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@map("handover_packs")
+}
+
+model Guide {
+  id                String       @id @default(cuid())
+  title             String
+  slug              String       @unique
+  content           String
+  category          GuideCategory
+  tags              String[]
+  isPublished       Boolean      @default(false)
+  featured          Boolean      @default(false)
+  
+  // SEO
+  metaDescription   String?
+  
+  // Audit fields
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  publishedAt       DateTime?
+  
+  @@map("guides")
+}
+
+enum GuideCategory {
+  CARE_MAINTENANCE
+  TROUBLESHOOTING
+  WARRANTY
+  SAFETY
+  INSTALLATION
+  DESIGN_TIPS
+}
+
+// ============================================================================
+// COMMUNICATION & INTEGRATION ENTITIES
+// ============================================================================
+
+model EmailJourney {
+  id                String           @id @default(cuid())
+  name              String
+  description       String?
+  isActive          Boolean          @default(true)
+  
+  // Trigger conditions
+  triggerEvent      EmailTrigger
+  triggerConditions Json             @default("{}")
+  
+  // Email sequence
+  emailSequence     EmailSequenceStep[]
+  
+  // Stats
+  totalSent         Int              @default(0)
+  totalOpened       Int              @default(0)
+  totalClicked      Int              @default(0)
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  @@map("email_journeys")
+}
+
+enum EmailTrigger {
+  STAGE_CHANGE
+  TASK_OVERDUE
+  APPOINTMENT_REMINDER
+  SURVEY_COMPLETED
+  DESIGN_READY
+  JOB_COMPLETED
+  PAYMENT_DUE
+}
+
+model EmailSequenceStep {
+  id                String       @id @default(cuid())
+  stepNumber        Int
+  templateId        String
+  delayDays         Int          @default(0)
+  delayHours        Int          @default(0)
+  
+  // Conditions
+  sendConditions    Json         @default("{}")
+  
+  // Relations
+  journeyId         String
+  journey           EmailJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  
+  @@unique([journeyId, stepNumber])
+  @@map("email_sequence_steps")
+}
+
+model Webhook {
+  id                String           @id @default(cuid())
+  name              String
+  url               String
+  events            WebhookEvent[]
+  secret            String?
+  isActive          Boolean          @default(true)
+  
+  // Stats
+  totalDeliveries   Int              @default(0)
+  lastDeliveryAt    DateTime?
+  lastSuccessAt     DateTime?
+  lastFailureAt     DateTime?
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  deliveries        WebhookDelivery[]
+  
+  @@map("webhooks")
+}
+
+enum WebhookEvent {
+  LEAD_CREATED
+  DEAL_STAGE_CHANGED
+  JOB_STATUS_CHANGED
+  TASK_COMPLETED
+  APPOINTMENT_SCHEDULED
+  DOCUMENT_UPLOADED
+  FORM_SUBMITTED
+  DESIGN_APPROVED
+  PAYMENT_RECEIVED
+}
+
+model WebhookDelivery {
+  id                String           @id @default(cuid())
+  eventType         WebhookEvent
+  payload           Json
+  httpStatus        Int?
+  responseBody      String?
+  errorMessage      String?
+  deliveryAttempts  Int              @default(1)
+  deliveredAt       DateTime?
+  
+  // Relations
+  webhookId         String
+  webhook           Webhook          @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  
+  @@map("webhook_deliveries")
+}
+
+model EventLog {
+  id                String       @id @default(cuid())
+  eventType         String
+  entityType        String       // e.g., "lead", "deal", "job"
+  entityId          String
+  changes           Json         // Before/after values
+  metadata          Json         @default("{}")
+  ipAddress         String?
+  userAgent         String?
+  
+  // Relations
+  userId            String?
+  user              User?        @relation("EventLogUser", fields: [userId], references: [id])
+  
+  // Audit fields
+  occurredAt        DateTime     @default(now())
+  
+  @@index([entityType, entityId])
+  @@index([eventType])
+  @@index([userId])
+  @@index([occurredAt])
+  @@map("event_logs")
+}
+
+model Integration {
+  id                String           @id @default(cuid())
+  name              String
+  type              IntegrationType
+  config            Json             @default("{}")
+  isActive          Boolean          @default(true)
+  lastSyncAt        DateTime?
+  nextSyncAt        DateTime?
+  syncErrors        Json             @default("[]")
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  
+  @@map("integrations")
+}
+
+enum IntegrationType {
+  TWILIO
+  DOCUSIGN
+  XERO
+  OUTLOOK
+  GOOGLE_CALENDAR
+  MAILCHIMP
+  ZAPIER
+}
+
+model MergeQueue {
+  id                String           @id @default(cuid())
+  entityType        String           // "client", "contact", etc.
+  primaryEntityId   String           // ID of record to keep
+  duplicateEntityId String           // ID of record to merge/delete
+  status            MergeStatus      @default(PENDING)
+  mergeRules        Json             // Rules for how to merge fields
+  
+  // Review
+  reviewedById      String?
+  reviewedBy        User?            @relation("MergeReviewer", fields: [reviewedById], references: [id])
+  reviewedAt        DateTime?
+  mergedAt          DateTime?
+  
+  // Audit fields
+  createdAt         DateTime         @default(now())
+  
+  @@map("merge_queue")
+}
+
+enum MergeStatus {
+  PENDING
+  REVIEWED
+  MERGED
+  REJECTED
+}
+
+// Add the missing relation to User model
+// mergeReviews      MergeQueue[] @relation("MergeReviewer")
