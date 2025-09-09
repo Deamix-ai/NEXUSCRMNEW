@@ -3,97 +3,13 @@
 import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { AddLeadModal } from '@/components/leads/add-lead-modal';
-
-// Mock data for leads
-const initialLeads = [
-  {
-    id: '1',
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@email.com',
-    phone: '+44 7700 900123',
-    company: 'Johnson Properties',
-    status: 'NEW',
-    source: 'Website',
-    value: 15000,
-    projectType: 'Kitchen Renovation',
-    address: '123 Oak Street, Manchester, M1 1AA',
-    notes: 'Interested in modern kitchen design with island',
-    createdAt: '2025-09-08T10:30:00Z',
-    lastContact: '2025-09-08T10:30:00Z',
-    assignedTo: 'John Smith',
-  },
-  {
-    id: '2',
-    name: 'Mike Davis',
-    email: 'mike.davis@email.com',
-    phone: '+44 7700 900124',
-    company: 'Davis Developments',
-    status: 'CONTACTED',
-    source: 'Referral',
-    value: 8500,
-    projectType: 'Bathroom Refit',
-    address: '456 Pine Road, Birmingham, B1 2BB',
-    notes: 'Looking for accessible bathroom solutions',
-    createdAt: '2025-09-07T14:15:00Z',
-    lastContact: '2025-09-08T09:00:00Z',
-    assignedTo: 'Jane Wilson',
-  },
-  {
-    id: '3',
-    name: 'Emma Wilson',
-    email: 'emma.wilson@email.com',
-    phone: '+44 7700 900125',
-    company: 'Wilson Homes',
-    status: 'QUOTED',
-    source: 'Trade Show',
-    value: 22000,
-    projectType: 'Complete Kitchen',
-    address: '789 Cedar Avenue, Leeds, LS1 3CC',
-    notes: 'Premium finish required, budget flexible',
-    createdAt: '2025-09-05T11:45:00Z',
-    lastContact: '2025-09-07T16:30:00Z',
-    assignedTo: 'John Smith',
-  },
-  {
-    id: '4',
-    name: 'David Brown',
-    email: 'david.brown@email.com',
-    phone: '+44 7700 900126',
-    company: null,
-    status: 'PROPOSAL_SENT',
-    source: 'Google Ads',
-    value: 12000,
-    projectType: 'Bathroom Renovation',
-    address: '321 Maple Close, Liverpool, L1 4DD',
-    notes: 'First-time renovation, needs guidance',
-    createdAt: '2025-09-04T16:20:00Z',
-    lastContact: '2025-09-06T10:15:00Z',
-    assignedTo: 'Jane Wilson',
-  },
-  {
-    id: '5',
-    name: 'Lisa Anderson',
-    email: 'lisa.anderson@email.com',
-    phone: '+44 7700 900127',
-    company: 'Anderson Estates',
-    status: 'NEGOTIATING',
-    source: 'Website',
-    value: 18500,
-    projectType: 'Kitchen & Utility',
-    address: '654 Birch Lane, Newcastle, NE1 5EE',
-    notes: 'Multi-property developer, potential for more work',
-    createdAt: '2025-09-03T09:30:00Z',
-    lastContact: '2025-09-08T11:45:00Z',
-    assignedTo: 'John Smith',
-  },
-];
+import { useCRM, Lead } from '@/contexts/CRMContext';
 
 const statusColors = {
   NEW: 'bg-blue-100 text-blue-800',
   CONTACTED: 'bg-yellow-100 text-yellow-800',
-  QUOTED: 'bg-purple-100 text-purple-800',
-  PROPOSAL_SENT: 'bg-indigo-100 text-indigo-800',
-  NEGOTIATING: 'bg-orange-100 text-orange-800',
+  QUALIFIED: 'bg-purple-100 text-purple-800',
+  PROPOSAL: 'bg-indigo-100 text-indigo-800',
   WON: 'bg-green-100 text-green-800',
   LOST: 'bg-red-100 text-red-800',
 };
@@ -122,19 +38,16 @@ function formatDate(dateString: string) {
 }
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState(initialLeads);
+  const { leads, addLead, updateLead, deleteLead } = useCRM();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
   const [assignedFilter, setAssignedFilter] = useState('');
 
-  const handleAddLead = (leadData: any) => {
-    const newLead = {
-      ...leadData,
-      id: (leads.length + 1).toString(),
-    };
-    setLeads([newLead, ...leads]);
+  const handleAddLead = (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
+    addLead(leadData);
+    setIsAddModalOpen(false);
   };
 
   const filteredLeads = leads.filter((lead) => {
@@ -148,196 +61,272 @@ export default function LeadsPage() {
     return matchesSearch && matchesStatus && matchesSource && matchesAssigned;
   });
 
+  // Get unique values for filters
+  const uniqueSources = Array.from(new Set(leads.map(lead => lead.source)));
+  const uniqueAssignees = Array.from(new Set(leads.map(lead => lead.assignedTo).filter(Boolean)));
+
   return (
     <DashboardLayout>
-      <div className="bg-gray-50 min-h-full">
+      <div className="px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <header className="bg-white shadow">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center py-6">
-              <div className="flex items-center">
-                <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
-                <span className="ml-3 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                  {filteredLeads.length} leads
-                </span>
-              </div>
-              <div className="flex items-center space-x-4">
-                <button className="bg-white border border-gray-300 rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                  Export
-                </button>
-                <button 
-                  onClick={() => setIsAddModalOpen(true)}
-                  className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-md text-sm font-medium"
-                >
-                  Add Lead
-                </button>
-              </div>
-            </div>
+        <div className="sm:flex sm:items-center">
+          <div className="sm:flex-auto">
+            <h1 className="text-2xl font-semibold leading-6 text-gray-900">Leads</h1>
+            <p className="mt-2 text-sm text-gray-700">
+              Manage and track potential customers and opportunities.
+            </p>
           </div>
-        </header>
-
-        {/* Filters */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
-                  Search
-                </label>
-                <input
-                  type="text"
-                  id="search"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                  placeholder="Search leads..."
-                />
-              </div>
-              <div>
-                <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <select
-                  id="status"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                >
-                  <option value="">All Statuses</option>
-                  <option value="NEW">New</option>
-                  <option value="CONTACTED">Contacted</option>
-                  <option value="QUOTED">Quoted</option>
-                  <option value="PROPOSAL_SENT">Proposal Sent</option>
-                  <option value="NEGOTIATING">Negotiating</option>
-                  <option value="WON">Won</option>
-                  <option value="LOST">Lost</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="source" className="block text-sm font-medium text-gray-700 mb-1">
-                  Source
-                </label>
-                <select
-                  id="source"
-                  value={sourceFilter}
-                  onChange={(e) => setSourceFilter(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                >
-                  <option value="">All Sources</option>
-                  <option value="Website">Website</option>
-                  <option value="Referral">Referral</option>
-                  <option value="Trade Show">Trade Show</option>
-                  <option value="Google Ads">Google Ads</option>
-                  <option value="Social">Social Media</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="assigned" className="block text-sm font-medium text-gray-700 mb-1">
-                  Assigned To
-                </label>
-                <select
-                  id="assigned"
-                  value={assignedFilter}
-                  onChange={(e) => setAssignedFilter(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
-                >
-                  <option value="">All Team Members</option>
-                  <option value="John Smith">John Smith</option>
-                  <option value="Jane Wilson">Jane Wilson</option>
-                </select>
-              </div>
-            </div>
+          <div className="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="block rounded-md bg-indigo-600 px-3 py-2 text-center text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            >
+              Add Lead
+            </button>
           </div>
         </div>
 
-        {/* Leads List */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
-          <div className="space-y-4">
-            {filteredLeads.map((lead) => (
-              <div key={lead.id} className="bg-white rounded-lg shadow hover:shadow-md transition-shadow">
-                <div className="p-6">
-                  <div className="flex items-start justify-between">
-                    {/* Lead Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <h3 className="text-lg font-medium text-gray-900 truncate">
-                          {lead.name}
-                        </h3>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[lead.status as keyof typeof statusColors]}`}>
-                          {lead.status.replace('_', ' ')}
-                        </span>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${sourceColors[lead.source as keyof typeof sourceColors] || 'bg-gray-50 text-gray-700'}`}>
-                          {lead.source}
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600">
-                        <div className="space-y-1">
-                          <p><span className="font-medium">Email:</span> {lead.email}</p>
-                          <p><span className="font-medium">Phone:</span> {lead.phone}</p>
-                          {lead.company && <p><span className="font-medium">Company:</span> {lead.company}</p>}
-                        </div>
-                        <div className="space-y-1">
-                          <p><span className="font-medium">Project:</span> {lead.projectType}</p>
-                          <p><span className="font-medium">Value:</span> {formatCurrency(lead.value)}</p>
-                          <p><span className="font-medium">Assigned:</span> {lead.assignedTo}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p><span className="font-medium">Created:</span> {formatDate(lead.createdAt)}</p>
-                          <p><span className="font-medium">Last Contact:</span> {formatDate(lead.lastContact)}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <p><span className="font-medium">Address:</span></p>
-                          <p className="text-xs">{lead.address}</p>
-                        </div>
-                      </div>
-                      
-                      {lead.notes && (
-                        <div className="mt-3">
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Notes:</span> {lead.notes}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center space-x-2 ml-4">
-                      <button className="p-2 text-gray-400 hover:text-gray-600">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                        </svg>
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-gray-600">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-gray-600">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                      <button className="p-2 text-gray-400 hover:text-red-600">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
+        {/* Stats Cards */}
+        <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">{leads.length}</span>
                   </div>
                 </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Leads</dt>
+                    <dd className="text-lg font-medium text-gray-900">{leads.length}</dd>
+                  </dl>
+                </div>
               </div>
-            ))}
+            </div>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">
+                      {leads.filter(l => l.status === 'WON').length}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Won Leads</dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {leads.filter(l => l.status === 'WON').length}
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">
+                      {leads.filter(l => ['NEW', 'CONTACTED', 'QUALIFIED'].includes(l.status)).length}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Active Leads</dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {leads.filter(l => ['NEW', 'CONTACTED', 'QUALIFIED'].includes(l.status)).length}
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">£</span>
+                  </div>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">Total Value</dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {formatCurrency(leads.reduce((sum, lead) => sum + lead.value, 0))}
+                    </dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Add Lead Modal */}
-        <AddLeadModal
-          isOpen={isAddModalOpen}
-          onClose={() => setIsAddModalOpen(false)}
-          onSubmit={handleAddLead}
-        />
+        {/* Filters */}
+        <div className="mt-8 bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex flex-wrap gap-4">
+              <div className="flex-1 min-w-0">
+                <input
+                  type="text"
+                  placeholder="Search leads..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <option value="">All Statuses</option>
+                <option value="NEW">New</option>
+                <option value="CONTACTED">Contacted</option>
+                <option value="QUALIFIED">Qualified</option>
+                <option value="PROPOSAL">Proposal</option>
+                <option value="WON">Won</option>
+                <option value="LOST">Lost</option>
+              </select>
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <option value="">All Sources</option>
+                {uniqueSources.map(source => (
+                  <option key={source} value={source}>{source}</option>
+                ))}
+              </select>
+              <select
+                value={assignedFilter}
+                onChange={(e) => setAssignedFilter(e.target.value)}
+                className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+              >
+                <option value="">All Assignees</option>
+                {uniqueAssignees.map(assignee => (
+                  <option key={assignee} value={assignee}>{assignee}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Leads Table */}
+        <div className="mt-8 flow-root">
+          <div className="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+            <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-300">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Lead
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Contact
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Status
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Value
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Source
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">
+                        Created
+                      </th>
+                      <th scope="col" className="relative px-6 py-3">
+                        <span className="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredLeads.map((lead) => (
+                      <tr key={lead.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                                <span className="text-sm font-medium text-gray-700">
+                                  {lead.name.split(' ').map(n => n[0]).join('')}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{lead.name}</div>
+                              <div className="text-sm text-gray-500">{lead.company}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{lead.email}</div>
+                          <div className="text-sm text-gray-500">{lead.phone}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${statusColors[lead.status as keyof typeof statusColors]}`}>
+                            {lead.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatCurrency(lead.value)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${sourceColors[lead.source as keyof typeof sourceColors] || 'bg-gray-50 text-gray-700'}`}>
+                            {lead.source}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(lead.createdAt)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            type="button"
+                            className="text-indigo-600 hover:text-indigo-900 mr-3"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteLead(lead.id)}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredLeads.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="text-sm text-gray-500">No leads found matching your criteria.</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Add Lead Modal */}
+      <AddLeadModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSubmit={handleAddLead}
+      />
     </DashboardLayout>
   );
 }
