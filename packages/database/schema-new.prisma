@@ -49,7 +49,6 @@ model User {
   ownedDeals        Deal[]    @relation("DealOwner")
   assignedTasks     Task[]    @relation("TaskAssignee")
   activities        Activity[]
-  ownedLeads        Lead[]    @relation("LeadOwner")
 
   @@map("users")
 }
@@ -92,7 +91,6 @@ model Client {
   snags            Snag[]
   jobs             Job[]
   events           EventLog[]
-  leads            Lead[]
 
   // Audit fields
   createdAt        DateTime     @default(now())
@@ -201,9 +199,6 @@ model Deal {
   probability       Int    @default(50)
   source            String?
   utm               Json?
-  
-  // Relations
-  lead              Lead?  @relation("LeadDeal")
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -406,7 +401,6 @@ enum SpecStatus {
 model Snag {
   id            String     @id @default(cuid())
   clientId      String
-  client        Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   roomId        String
   room          Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
   title         String
@@ -511,10 +505,10 @@ model Lead {
   clientId          String
   client            Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
   ownerId           String
-  owner             User       @relation("LeadOwner", fields: [ownerId], references: [id])
+  owner             User       @relation(fields: [ownerId], references: [id])
   
   dealId            String?    @unique
-  deal              Deal?      @relation("LeadDeal", fields: [dealId], references: [id])
+  deal              Deal?      @relation(fields: [dealId], references: [id])
   
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -539,4 +533,10 @@ enum Priority {
   MEDIUM
   HIGH
   URGENT
+}
+
+// Extensions for PostgreSQL
+generator prismaExtensions {
+  provider = "prisma-extension-pg"
+  features = ["trigram"]
 }

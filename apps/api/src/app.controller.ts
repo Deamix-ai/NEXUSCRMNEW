@@ -18,4 +18,11 @@ export class AppController {
   getHealthCheck(): { status: string; timestamp: string } {
     return this.appService.getHealth();
   }
+
+  @Get('api/dashboard/stats')
+  @ApiTags('Dashboard')
+  @ApiOperation({ summary: 'Get dashboard statistics' })
+  async getDashboardStats() {
+    return this.appService.getDashboardStats();
+  }
 }
