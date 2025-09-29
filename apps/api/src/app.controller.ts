@@ -9,20 +9,20 @@ export class AppController {
 
   @Get()
   @ApiOperation({ summary: 'Get API status' })
-  getHealth(): { status: string; timestamp: string } {
-    return this.appService.getHealth();
+  getHello(): string {
+    return this.appService.getHello();
   }
 
   @Get('health')
   @ApiOperation({ summary: 'Health check' })
-  getHealthCheck(): { status: string; timestamp: string } {
-    return this.appService.getHealth();
+  getHealthCheck(): string {
+    return this.appService.getHello();
   }
 
   @Get('api/dashboard/stats')
   @ApiTags('Dashboard')
   @ApiOperation({ summary: 'Get dashboard statistics' })
   async getDashboardStats() {
-    return this.appService.getDashboardStats();
+    return this.appService.getStats();
   }
 }

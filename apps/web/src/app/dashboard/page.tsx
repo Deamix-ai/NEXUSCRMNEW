@@ -1,10 +1,127 @@
 'use client';
 
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { useCRM } from '@/contexts/CRMContext';
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { Users, Building2, Target, CheckCircle, TrendingUp, Clock } from 'lucide-react';
+import Link from 'next/link';
+import { 
+  useDashboardStats, 
+  useAccounts, 
+  useLeads, 
+  useProjects, 
+  useEnquiries 
+} from '@/hooks/api-hooks';
+
+// Type definitions
+interface Account {
+  id: string;
+  name: string;
+  status: string;
+  _count?: {
+    projects?: number;
+  };
+}
+
+interface Lead {
+  id: string;
+  title: string;
+  status: string;
+  estimatedValue: string;
+  account?: Account;
+}
+
+interface Project {
+  id: string;
+  title: string;
+  status: string;
+}
+
+interface DashboardStats {
+  totalLeads: number;
+  totalAccounts: number;
+  totalProjects: number;
+  activeProjects: number;
+  totalRevenue: number;
+  conversionRate: number;
+  totalValue: number;
+}
+
+interface ProjectsResponse {
+  projects: Project[];
+  total: number;
+}
+
+interface ApiResponse<T> {
+  data: T[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
+  };
+}
+
+
 
 export default function DashboardPage() {
-  const { leads, clients, jobs, addLead, stats } = useCRM();
+  const router = useRouter();
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  
+  // Use proper React Query hooks
+  const { data: dashboardStats, isLoading: statsLoading, error: statsError } = useDashboardStats();
+  const { data: accountsData, isLoading: accountsLoading } = useAccounts({ limit: 5 });
+  const { data: leadsData, isLoading: leadsLoading } = useLeads({ limit: 5 });
+  const { data: projectsData, isLoading: projectsLoading } = useProjects({ limit: 5 });
+  const { data: enquiriesData, isLoading: enquiriesLoading } = useEnquiries({ limit: 5 });
+  
+  // Extract data from API responses with proper typing
+  const accounts = (accountsData as ApiResponse<Account>)?.data || [];
+  const leads = (leadsData as Lead[]) || []; // Leads API returns array directly
+  const projects = (projectsData as ProjectsResponse)?.projects || []; // Projects API returns {projects: [...]}
+  const enquiries = (enquiriesData as any[]) || []; // Enquiries API returns array directly
+  
+  // Calculate stats from actual data or use dashboard stats API
+  const stats: DashboardStats = dashboardStats as DashboardStats || {
+    totalLeads: leads.length,
+    totalAccounts: accounts.length,
+    totalProjects: projects.length,
+    activeProjects: projects.filter(p => p.status === 'ACTIVE').length,
+    totalRevenue: leads.reduce((sum, lead) => sum + (parseFloat(lead.estimatedValue) || 0), 0),
+    conversionRate: leads.length > 0 ? (leads.filter(lead => lead.status === 'WON').length / leads.length * 100) : 0,
+    totalValue: leads.reduce((sum, lead) => sum + (parseFloat(lead.estimatedValue) || 0), 0)
+  };
+  
+  const loading = statsLoading || accountsLoading || leadsLoading || projectsLoading || enquiriesLoading;
+
+  const quickActions = [
+    {
+      name: 'New Enquiry',
+      href: '/enquiries',
+      icon: '📝',
+      description: 'Create a new customer enquiry'
+    },
+    {
+      name: 'New Account',
+      href: '/accounts',
+      icon: '👤',
+      description: 'Add a new customer account'
+    },
+    {
+      name: 'New Lead',
+      href: '/leads',
+      icon: '🎯',
+      description: 'Create a new sales lead'
+    },
+    {
+      name: 'View Projects',
+      href: '/projects',
+      icon: '🏗️',
+      description: 'Manage active projects'
+    }
+  ];
 
   return (
     <DashboardLayout>
@@ -28,25 +145,41 @@ export default function DashboardPage() {
                 >
                   Export
                 </button>
-                <button
-                  type="button"
-                  className="ml-3 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  onClick={() => addLead({ 
-                    name: 'John Doe', 
-                    email: 'john@example.com', 
-                    phone: '123-456-7890', 
-                    status: 'NEW',
-                    value: 5000,
-                    source: 'Website',
-                    projectType: 'Bathroom',
-                    address: '123 Main St',
-                    assignedTo: '',
-                    notes: 'New lead from website',
-                    lastContact: new Date().toISOString()
-                  })}
-                >
-                  New Lead
-                </button>
+                <div className="ml-3 relative">
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    onClick={() => setShowQuickActions(!showQuickActions)}
+                  >
+                    Quick Actions
+                    <svg className="ml-2 -mr-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {showQuickActions && (
+                    <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                      <div className="py-1">
+                        {quickActions.map((action) => (
+                          <button
+                            key={action.name}
+                            onClick={() => {
+                              router.push(action.href);
+                              setShowQuickActions(false);
+                            }}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                          >
+                            <span className="mr-3 text-lg">{action.icon}</span>
+                            <div className="text-left">
+                              <div className="font-medium">{action.name}</div>
+                              <div className="text-xs text-gray-500">{action.description}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -84,8 +217,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">Active Jobs</dt>
-                        <dd className="text-lg font-medium text-gray-900">{stats.totalJobs}</dd>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Total Accounts</dt>
+                        <dd className="text-lg font-medium text-gray-900">{stats.totalAccounts}</dd>
                       </dl>
                     </div>
                   </div>
@@ -104,8 +237,8 @@ export default function DashboardPage() {
                     </div>
                     <div className="ml-5 w-0 flex-1">
                       <dl>
-                        <dt className="text-sm font-medium text-gray-500 truncate">Total Clients</dt>
-                        <dd className="text-lg font-medium text-gray-900">{stats.totalClients}</dd>
+                        <dt className="text-sm font-medium text-gray-500 truncate">Total Projects</dt>
+                        <dd className="text-lg font-medium text-gray-900">{stats.totalProjects}</dd>
                       </dl>
                     </div>
                   </div>
@@ -141,39 +274,45 @@ export default function DashboardPage() {
                   <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Leads</h3>
                   <div className="flow-root">
                     <ul className="-my-5 divide-y divide-gray-200">
-                      {leads.slice(0, 5).map((lead) => (
-                        <li key={lead.id} className="py-4">
-                          <div className="flex items-center space-x-4">
-                            <div className="flex-shrink-0">
-                              <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
-                                <span className="text-sm font-medium text-gray-700">
-                                  {lead.name.charAt(0)}
-                                </span>
+                      {loading ? (
+                        <li className="py-4 text-center text-gray-500">Loading leads...</li>
+                      ) : leads.length === 0 ? (
+                        <li className="py-4 text-center text-gray-500">No recent leads</li>
+                      ) : (
+                        leads.slice(0, 5).map((lead) => (
+                          <li key={lead.id} className="py-4">
+                            <Link href={`/leads/${lead.id}`} className="block hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors">
+                              <div className="flex items-center space-x-4">
+                                <div className="flex-shrink-0">
+                                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <Target className="h-4 w-4 text-blue-600" />
+                                  </div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 truncate">
+                                    {lead.title}
+                                  </p>
+                                  <p className="text-sm text-gray-500 truncate">
+                                    {lead.account?.name} • £{parseFloat(lead.estimatedValue || '0').toLocaleString()}
+                                  </p>
+                                </div>
+                                <div>
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    lead.status === 'NEW' ? 'bg-blue-100 text-blue-800' :
+                                    lead.status === 'CONTACTED' ? 'bg-yellow-100 text-yellow-800' :
+                                    lead.status === 'QUALIFIED' ? 'bg-green-100 text-green-800' :
+                                    lead.status === 'PROPOSAL_SENT' ? 'bg-purple-100 text-purple-800' :
+                                    lead.status === 'WON' ? 'bg-green-100 text-green-800' :
+                                    'bg-red-100 text-red-800'
+                                  }`}>
+                                    {lead.status.replace('_', ' ')}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {lead.name}
-                              </p>
-                              <p className="text-sm text-gray-500 truncate">
-                                {lead.email}
-                              </p>
-                            </div>
-                            <div>
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                lead.status === 'NEW' ? 'bg-blue-100 text-blue-800' :
-                                lead.status === 'CONTACTED' ? 'bg-yellow-100 text-yellow-800' :
-                                lead.status === 'QUALIFIED' ? 'bg-green-100 text-green-800' :
-                                lead.status === 'PROPOSAL' ? 'bg-purple-100 text-purple-800' :
-                                lead.status === 'WON' ? 'bg-green-100 text-green-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {lead.status}
-                              </span>
-                            </div>
-                          </div>
-                        </li>
-                      ))}
+                            </Link>
+                          </li>
+                        ))
+                      )}
                     </ul>
                   </div>
                 </div>

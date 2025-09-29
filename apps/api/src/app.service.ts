@@ -5,53 +5,40 @@ import { PrismaService } from './modules/database/prisma.service';
 export class AppService {
   constructor(private prisma: PrismaService) {}
 
-  getHealth(): { status: string; timestamp: string } {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-    };
+  getHello(): string {
+    return 'CRM API is running!';
   }
 
-  async getDashboardStats() {
-    const [
-      totalLeads,
-      newLeads,
-      totalClients,
-      activeJobs,
-      totalDeals,
-      recentActivities,
-    ] = await Promise.all([
-      this.prisma.lead.count(),
-      this.prisma.lead.count({ where: { status: 'NEW' } }),
-      this.prisma.client.count(),
-      this.prisma.job.count({ where: { status: 'IN_PROGRESS' } }),
-      this.prisma.deal.count(),
-      this.prisma.activity.findMany({
-        take: 10,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: true,
-          lead: true,
-          client: true,
-        },
-      }),
-    ]);
+  async getStats() {
+    try {
+      const [
+        totalLeads,
+        newLeads,
+        totalAccounts,
+        totalProjects,
+      ] = await Promise.all([
+        this.prisma.lead.count(),
+        this.prisma.lead.count({ where: { status: 'NEW' } }),
+        this.prisma.account.count(),
+        this.prisma.project.count(),
+      ]);
 
-    return {
-      leads: {
-        total: totalLeads,
-        new: newLeads,
-      },
-      clients: {
-        total: totalClients,
-      },
-      jobs: {
-        active: activeJobs,
-      },
-      deals: {
-        total: totalDeals,
-      },
-      recentActivities,
-    };
+      return {
+        totalLeads,
+        newLeads,
+        totalAccounts,
+        totalProjects,
+        recentActivities: [], // Simplified for now
+      };
+    } catch (error) {
+      console.error('Error fetching stats:', error);
+      return {
+        totalLeads: 0,
+        newLeads: 0,
+        totalAccounts: 0,
+        totalProjects: 0,
+        recentActivities: [],
+      };
+    }
   }
 }

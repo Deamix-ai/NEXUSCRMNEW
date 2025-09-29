@@ -1,361 +1,375 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { KPIDashboard } from '@/components/analytics/KPIDashboard';
+import { CustomReportBuilder } from '@/components/analytics/CustomReportBuilder';
+import { PerformanceAnalytics } from '@/components/analytics/PerformanceAnalytics';
+import {
+  useRefreshAnalytics,
+  useSaveReport,
+  useRunReport,
+  useDeleteReport,
+  useDuplicateReport,
+} from '@/hooks/api-hooks';
+import { 
+  BarChart3,
+  FileText,
+  Activity,
+  TrendingUp,
+  DollarSign,
+  Target,
+  Award
+} from 'lucide-react';
 
-interface KPI {
-  name: string;
-  value: string;
-  change: number;
-  trend: 'up' | 'down' | 'neutral';
-  icon: string;
-}
+// Sample data for KPI Dashboard
+const sampleKPIMetrics = [
+  {
+    id: 'total_revenue',
+    title: 'Total Revenue',
+    value: 156780,
+    previousValue: 142300,
+    change: 10.2,
+    changeType: 'increase' as const,
+    target: 180000,
+    unit: 'currency' as const,
+    category: 'sales' as const,
+    trend: [120000, 125000, 138000, 142000, 148000, 152000, 156780],
+    status: 'good' as const,
+    description: 'Total revenue generated from all closed deals this period'
+  },
+  {
+    id: 'total_deals',
+    title: 'Deals Closed',
+    value: 47,
+    previousValue: 42,
+    change: 11.9,
+    changeType: 'increase' as const,
+    target: 60,
+    unit: 'number' as const,
+    category: 'sales' as const,
+    trend: [35, 38, 40, 42, 44, 46, 47],
+    status: 'good' as const,
+    description: 'Number of successfully closed deals'
+  },
+  {
+    id: 'conversion_rate',
+    title: 'Lead Conversion Rate',
+    value: 24.3,
+    previousValue: 22.1,
+    change: 10.0,
+    changeType: 'increase' as const,
+    target: 30,
+    unit: 'percentage' as const,
+    category: 'pipeline' as const,
+    trend: [20.5, 21.2, 21.8, 22.1, 23.2, 23.8, 24.3],
+    status: 'good' as const,
+    description: 'Percentage of leads that convert to projects'
+  },
+  {
+    id: 'pipeline_value',
+    title: 'Pipeline Value',
+    value: 284500,
+    previousValue: 267800,
+    change: 6.2,
+    changeType: 'increase' as const,
+    target: 350000,
+    unit: 'currency' as const,
+    category: 'pipeline' as const,
+    trend: [240000, 248000, 256000, 267800, 272000, 278000, 284500],
+    status: 'warning' as const,
+    description: 'Total value of deals in active pipeline'
+  },
+  {
+    id: 'average_deal_size',
+    title: 'Average Deal Size',
+    value: 3335,
+    previousValue: 3388,
+    change: -1.6,
+    changeType: 'decrease' as const,
+    target: 4000,
+    unit: 'currency' as const,
+    category: 'sales' as const,
+    trend: [3200, 3280, 3350, 3388, 3365, 3340, 3335],
+    status: 'warning' as const,
+    description: 'Average value per closed deal'
+  }
+];
 
-interface ChartData {
-  labels: string[];
-  datasets: Array<{
-    label: string;
-    data: number[];
-    color: string;
-  }>;
-}
+// Sample data for Custom Report Builder
+const sampleReportFields = [
+  {
+    id: 'enquiry_title',
+    name: 'Enquiry Title',
+    type: 'string' as const,
+    source: 'enquiries' as const,
+    category: 'dimensions' as const,
+    description: 'Title of the enquiry'
+  },
+  {
+    id: 'enquiry_value',
+    name: 'Estimated Value',
+    type: 'currency' as const,
+    source: 'enquiries' as const,
+    category: 'measures' as const,
+    description: 'Estimated value of the enquiry',
+    aggregation: 'sum' as const
+  }
+];
+
+const sampleSavedReports = [
+  {
+    id: '1',
+    name: 'Monthly Sales Report',
+    description: 'Comprehensive monthly sales performance analysis',
+    type: 'table' as const,
+    fields: ['enquiry_title', 'enquiry_value'],
+    filters: [],
+    sorts: [],
+    isPublic: false,
+    tags: ['sales', 'monthly'],
+    createdBy: 'John Smith',
+    createdAt: '2024-09-01T10:00:00Z',
+    updatedAt: '2024-09-15T14:30:00Z',
+    lastRun: '2024-09-18T09:15:00Z'
+  }
+];
+
+// Sample data for Performance Analytics
+const samplePerformanceMetrics = [
+  {
+    id: 'revenue_growth',
+    category: 'sales' as const,
+    name: 'Revenue Growth',
+    value: 15.2,
+    previousValue: 12.8,
+    target: 20,
+    unit: 'percentage' as const,
+    trend: 'up' as const,
+    changePercent: 18.8,
+    status: 'good' as const,
+    description: 'Year-over-year revenue growth percentage',
+    benchmark: 18
+  }
+];
+
+const sampleTeamMembers = [
+  {
+    id: '1',
+    name: 'Sarah Johnson',
+    role: 'Senior Sales Executive',
+    metrics: {
+      revenue: 89500,
+      deals: 27,
+      conversionRate: 28.5,
+      activities: 156,
+      responseTime: 1.8
+    },
+    targets: {
+      revenue: 100000,
+      deals: 30,
+      conversionRate: 25
+    },
+    performance: {
+      rank: 1,
+      score: 92,
+      trend: 'up' as const
+    }
+  }
+];
+
+const samplePipelineMetrics = [
+  {
+    stage: 'Enquiry',
+    count: 45,
+    value: 135000,
+    averageAge: 3,
+    conversionRate: 68.2,
+    velocity: 12
+  }
+];
+
+const sampleActivityMetrics = [
+  {
+    type: 'calls' as const,
+    count: 245,
+    successRate: 67.3,
+    averageResponseTime: 2.4,
+    trend: 'up' as const
+  }
+];
 
 const AnalyticsPage = () => {
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
-  const [kpis, setKpis] = useState<KPI[]>([]);
-  const [revenueData, setRevenueData] = useState<ChartData | null>(null);
-  const [conversionData, setConversionData] = useState<ChartData | null>(null);
+  const [activeTab, setActiveTab] = useState<'kpi' | 'reports' | 'performance'>('kpi');
+  const [dateRange, setDateRange] = useState('month');
 
-  useEffect(() => {
-    // Mock analytics data
-    setKpis([
-      {
-        name: 'Total Revenue',
-        value: '£147,250',
-        change: 12.5,
-        trend: 'up',
-        icon: '💰'
-      },
-      {
-        name: 'Lead Conversion',
-        value: '24.8%',
-        change: 5.2,
-        trend: 'up',
-        icon: '🎯'
-      },
-      {
-        name: 'Avg. Project Value',
-        value: '£8,450',
-        change: -2.1,
-        trend: 'down',
-        icon: '📊'
-      },
-      {
-        name: 'Customer Satisfaction',
-        value: '4.7/5',
-        change: 0.3,
-        trend: 'up',
-        icon: '⭐'
-      },
-      {
-        name: 'Project Completion',
-        value: '96.2%',
-        change: 1.8,
-        trend: 'up',
-        icon: '✅'
-      },
-      {
-        name: 'Response Time',
-        value: '2.4 hrs',
-        change: -15.3,
-        trend: 'up',
-        icon: '⚡'
-      }
-    ]);
+  // React Query hooks
+  const refreshAnalytics = useRefreshAnalytics();
+  const saveReport = useSaveReport();
+  const runReport = useRunReport();
+  const deleteReport = useDeleteReport();
+  const duplicateReport = useDuplicateReport();
 
-    setRevenueData({
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
-      datasets: [
-        {
-          label: 'Revenue',
-          data: [15000, 18500, 22000, 19500, 25000, 28500, 24000, 31000, 29500],
-          color: '#3B82F6'
-        },
-        {
-          label: 'Target',
-          data: [20000, 20000, 20000, 20000, 25000, 25000, 25000, 30000, 30000],
-          color: '#EF4444'
-        }
-      ]
-    });
-
-    setConversionData({
-      labels: ['Leads', 'Consultations', 'Quotes', 'Won'],
-      datasets: [
-        {
-          label: 'This Month',
-          data: [124, 67, 45, 28],
-          color: '#10B981'
-        },
-        {
-          label: 'Last Month',
-          data: [98, 52, 38, 21],
-          color: '#6B7280'
-        }
-      ]
-    });
-  }, [timeRange]);
-
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'up': return '↗️';
-      case 'down': return '↘️';
-      default: return '➡️';
-    }
+  const handleRefreshData = () => {
+    refreshAnalytics.mutate();
   };
 
-  const getTrendColor = (trend: string) => {
-    switch (trend) {
-      case 'up': return 'text-green-600';
-      case 'down': return 'text-red-600';
-      default: return 'text-gray-600';
-    }
+  const handleSaveReport = (report: any) => {
+    saveReport.mutate(report);
+  };
+
+  const handleRunReport = (report: any) => {
+    runReport.mutate({ reportId: report.id, params: report.parameters });
+  };
+
+  const handleDeleteReport = (reportId: string) => {
+    deleteReport.mutate(reportId);
+  };
+
+  const handleDuplicateReport = (reportId: string) => {
+    duplicateReport.mutate(reportId);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Business Analytics</h1>
-            <div className="flex space-x-3">
-              <select
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value as any)}
-                className="px-4 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
-                <option value="90d">Last 90 days</option>
-                <option value="1y">Last year</option>
-              </select>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                Export Report
-              </button>
+    <DashboardLayout>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-blue-600 rounded-lg">
+                <BarChart3 className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  Reporting & Analytics Dashboard
+                </h1>
+                <p className="text-gray-600">
+                  Comprehensive business intelligence and performance monitoring
+                </p>
+              </div>
+            </div>
+
+            {/* Key Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-100">Total Revenue</p>
+                    <p className="text-2xl font-bold">£156,780</p>
+                  </div>
+                  <DollarSign className="h-8 w-8 text-blue-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  <span className="text-sm">+10.2% from last month</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100">Active Deals</p>
+                    <p className="text-2xl font-bold">102</p>
+                  </div>
+                  <Target className="h-8 w-8 text-green-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  <span className="text-sm">+8 new this week</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100">Conversion Rate</p>
+                    <p className="text-2xl font-bold">24.3%</p>
+                  </div>
+                  <Activity className="h-8 w-8 text-purple-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  <span className="text-sm">+2.2% improvement</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-orange-100">Team Performance</p>
+                    <p className="text-2xl font-bold">84%</p>
+                  </div>
+                  <Award className="h-8 w-8 text-orange-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  <span className="text-sm">Above target</span>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* Navigation Tabs */}
+          <div className="border-b border-gray-200 mb-8">
+            <nav className="-mb-px flex space-x-8">
+              {[
+                { id: 'kpi', label: 'KPI Dashboard', icon: BarChart3 },
+                { id: 'reports', label: 'Custom Reports', icon: FileText },
+                { id: 'performance', label: 'Performance Analytics', icon: Activity }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <tab.icon className="h-5 w-5" />
+                  <span>{tab.label}</span>
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Content */}
+          {activeTab === 'kpi' && (
+            <KPIDashboard
+              metrics={sampleKPIMetrics}
+              charts={[]}
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              onRefresh={handleRefreshData}
+            />
+          )}
+
+          {activeTab === 'reports' && (
+            <CustomReportBuilder
+              fields={sampleReportFields}
+              savedReports={sampleSavedReports}
+              onSaveReport={handleSaveReport}
+              onRunReport={handleRunReport}
+              onDeleteReport={handleDeleteReport}
+              onDuplicateReport={handleDuplicateReport}
+            />
+          )}
+
+          {activeTab === 'performance' && (
+            <PerformanceAnalytics
+              metrics={samplePerformanceMetrics}
+              teamMembers={sampleTeamMembers}
+              pipelineMetrics={samplePipelineMetrics}
+              activityMetrics={sampleActivityMetrics}
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              onRefresh={handleRefreshData}
+            />
+          )}
         </div>
       </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-          {kpis.map((kpi, index) => (
-            <div key={index} className="bg-white rounded-lg shadow-sm p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center">
-                    <span className="text-2xl mr-3">{kpi.icon}</span>
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">{kpi.name}</p>
-                      <p className="text-2xl font-bold text-gray-900">{kpi.value}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className={`flex items-center text-sm font-medium ${getTrendColor(kpi.trend)}`}>
-                  <span className="mr-1">{getTrendIcon(kpi.trend)}</span>
-                  {Math.abs(kpi.change)}%
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Charts Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Revenue Chart */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Overview</h3>
-            <div className="h-64 flex items-end justify-between space-x-2">
-              {revenueData?.labels.map((label, index) => {
-                const revenueValue = revenueData.datasets[0].data[index];
-                const targetValue = revenueData.datasets[1].data[index];
-                const maxValue = Math.max(...revenueData.datasets.flatMap(d => d.data));
-                const revenueHeight = (revenueValue / maxValue) * 200;
-                const targetHeight = (targetValue / maxValue) * 200;
-                
-                return (
-                  <div key={label} className="flex-1 flex flex-col items-center">
-                    <div className="relative w-full mb-2" style={{ height: '200px' }}>
-                      <div
-                        className="absolute bottom-0 w-full bg-blue-500 rounded-t"
-                        style={{ height: `${revenueHeight}px` }}
-                        title={`Revenue: £${revenueValue.toLocaleString()}`}
-                      />
-                      <div
-                        className="absolute bottom-0 w-full border-2 border-red-500 border-dashed"
-                        style={{ height: `${targetHeight}px` }}
-                        title={`Target: £${targetValue.toLocaleString()}`}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-600">{label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex justify-center space-x-6 mt-4">
-              <div className="flex items-center">
-                <div className="w-3 h-3 bg-blue-500 rounded mr-2"></div>
-                <span className="text-sm text-gray-600">Revenue</span>
-              </div>
-              <div className="flex items-center">
-                <div className="w-3 h-3 border-2 border-red-500 border-dashed rounded mr-2"></div>
-                <span className="text-sm text-gray-600">Target</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Conversion Funnel */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Conversion Funnel</h3>
-            <div className="space-y-4">
-              {conversionData?.labels.map((label, index) => {
-                const thisMonth = conversionData.datasets[0].data[index];
-                const lastMonth = conversionData.datasets[1].data[index];
-                const maxValue = Math.max(...conversionData.datasets[0].data);
-                const width = (thisMonth / maxValue) * 100;
-                const change = ((thisMonth - lastMonth) / lastMonth) * 100;
-                
-                return (
-                  <div key={label}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium text-gray-700">{label}</span>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-sm text-gray-900 font-medium">{thisMonth}</span>
-                        <span className={`text-xs ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {change >= 0 ? '+' : ''}{change.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div
-                        className="bg-green-500 h-3 rounded-full transition-all duration-300"
-                        style={{ width: `${width}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Detailed Analytics */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Top Services */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Services</h3>
-            <div className="space-y-4">
-              {[
-                { name: 'Bathroom Renovation', revenue: 89500, projects: 12 },
-                { name: 'Kitchen Installation', revenue: 67200, projects: 8 },
-                { name: 'Wet Room Conversion', revenue: 45800, projects: 15 },
-                { name: 'Boiler Replacement', revenue: 23400, projects: 18 },
-                { name: 'Tiling Services', revenue: 18600, projects: 22 }
-              ].map((service, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <div>
-                    <div className="font-medium text-gray-900">{service.name}</div>
-                    <div className="text-sm text-gray-600">{service.projects} projects</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-medium text-gray-900">£{service.revenue.toLocaleString()}</div>
-                    <div className="text-sm text-gray-600">Revenue</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Customer Insights */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Insights</h3>
-            <div className="space-y-4">
-              <div className="border rounded-lg p-4">
-                <div className="text-sm text-gray-600">Repeat Customers</div>
-                <div className="text-2xl font-bold text-green-600">32%</div>
-                <div className="text-xs text-gray-500">+8% from last month</div>
-              </div>
-              
-              <div className="border rounded-lg p-4">
-                <div className="text-sm text-gray-600">Avg. Customer Lifetime Value</div>
-                <div className="text-2xl font-bold text-blue-600">£12,450</div>
-                <div className="text-xs text-gray-500">+15% from last quarter</div>
-              </div>
-              
-              <div className="border rounded-lg p-4">
-                <div className="text-sm text-gray-600">Referral Rate</div>
-                <div className="text-2xl font-bold text-purple-600">18%</div>
-                <div className="text-xs text-gray-500">+3% from last month</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Team Performance */}
-          <div className="bg-white rounded-lg shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Team Performance</h3>
-            <div className="space-y-4">
-              {[
-                { name: 'Mike Johnson', role: 'Senior Installer', efficiency: 96, projects: 8 },
-                { name: 'Sarah Wilson', role: 'Project Manager', efficiency: 94, projects: 12 },
-                { name: 'Tom Brown', role: 'Designer', efficiency: 91, projects: 15 },
-                { name: 'Lisa Davis', role: 'Sales Consultant', efficiency: 89, projects: 24 }
-              ].map((member, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-900">{member.name}</div>
-                    <div className="text-sm text-gray-600">{member.role}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-medium text-gray-900">{member.efficiency}%</div>
-                    <div className="text-xs text-gray-500">{member.projects} projects</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activity Feed */}
-        <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Business Activity</h3>
-          <div className="space-y-3">
-            {[
-              { time: '2 minutes ago', event: 'New lead generated from website contact form', type: 'lead' },
-              { time: '15 minutes ago', event: 'Payment received: £2,450 from John Smith', type: 'payment' },
-              { time: '1 hour ago', event: 'Project "Modern Bathroom Suite" marked as completed', type: 'project' },
-              { time: '2 hours ago', event: 'Quote sent to Emma Davis for kitchen renovation', type: 'quote' },
-              { time: '3 hours ago', event: 'New 5-star review received on Google', type: 'review' },
-              { time: '4 hours ago', event: 'Consultation scheduled with Michael Brown for next Tuesday', type: 'booking' }
-            ].map((activity, index) => (
-              <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-                <div className={`w-2 h-2 rounded-full mt-2 ${
-                  activity.type === 'lead' ? 'bg-blue-500' :
-                  activity.type === 'payment' ? 'bg-green-500' :
-                  activity.type === 'project' ? 'bg-purple-500' :
-                  activity.type === 'quote' ? 'bg-yellow-500' :
-                  activity.type === 'review' ? 'bg-pink-500' : 'bg-gray-500'
-                }`}></div>
-                <div className="flex-1">
-                  <div className="text-sm text-gray-900">{activity.event}</div>
-                  <div className="text-xs text-gray-500">{activity.time}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+    </DashboardLayout>
   );
 };
 

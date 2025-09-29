@@ -9,9 +9,30 @@
   ],
   "scripts": {
     "build": "npx turbo run build",
-    "dev": "npx turbo run dev",
+    "dev": "npm run port-check && npx turbo run dev",
+    "dev:with-studio": "npm run port-check && concurrently \"npx turbo run dev\" \"npm run db:studio\"",
+    "dev:minimal": "npm run port-check && npx turbo run dev",
+    "dev:full": "npm run port-check && npx turbo run dev studio",
+    "dev:api": "cd apps/api && PORT=3001 npm run dev",
+    "dev:web": "cd apps/web && PORT=3000 npm run dev",
+    "dev:start": "node scripts/dev-simple.js",
+    "dev:legacy": "npm run port-check && concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "port-check": "node scripts/check-ports.js",
+    "stop-dev": "node scripts/stop-dev.js",
     "lint": "npx turbo run lint",
     "test": "npx turbo run test",
+    "test:unit": "cd apps/web && npm run test",
+    "test:unit:watch": "cd apps/web && npm run test:watch",
+    "test:unit:coverage": "cd apps/web && npm run test -- --coverage",
+    "test:e2e": "cd apps/web && npm run test:e2e",
+    "test:e2e:ui": "cd apps/web && npm run test:e2e:ui",
+    "test:e2e:headed": "cd apps/web && npx playwright test --headed",
+    "test:api": "cd apps/api && npm run test",
+    "test:api:watch": "cd apps/api && npm run test:watch",
+    "test:api:coverage": "cd apps/api && npm run test:cov",
+    "test:api:e2e": "cd apps/api && npm run test:e2e",
+    "test:all": "npm run test:unit && npm run test:api && npm run test:e2e",
+    "test:ci": "npm run test:unit:coverage && npm run test:api:coverage && npm run test:e2e",
     "type-check": "npx turbo run type-check",
     "clean": "turbo run clean",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
@@ -20,6 +41,7 @@
     "db:push": "cd packages/database && npm run push",
     "db:migrate": "cd packages/database && npm run migrate",
     "db:seed": "cd packages/database && npm run seed",
+    "db:studio": "cd packages/database && npm run studio",
     "docker:build": "docker-compose build",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
@@ -30,6 +52,14 @@
   "devDependencies": {
     "@turbo/gen": "^1.10.12",
     "@types/node": "^20.8.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "concurrently": "^9.2.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "prettier": "^3.0.3",
     "turbo": "^1.10.12",
     "typescript": "^5.2.2"
@@ -40,7 +70,6 @@
   },
   "packageManager": "npm@9.8.1",
   "dependencies": {
-    "@types/nodemailer": "^7.0.1",
-    "nodemailer": "^7.0.6"
+    "lucide-react": "^0.544.0"
   }
 }

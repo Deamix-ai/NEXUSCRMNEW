@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { AddLeadModal } from '@/components/leads/add-lead-modal';
-import { useCRM, Lead } from '@/contexts/CRMContext';
+import { ConvertLeadToDealModal } from '@/components/conversions/convert-lead-to-deal-modal';
+import { leadsApi } from '@/lib/api-client';
+
+
 
 const statusColors = {
   NEW: 'bg-blue-100 text-blue-800',
@@ -38,32 +42,108 @@ function formatDate(dateString: string) {
 }
 
 export default function LeadsPage() {
-  const { leads, addLead, updateLead, deleteLead } = useCRM();
+  const [leads, setLeads] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
-  const [assignedFilter, setAssignedFilter] = useState('');
 
-  const handleAddLead = (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
-    addLead(leadData);
-    setIsAddModalOpen(false);
+  useEffect(() => {
+    fetchLeads();
+  }, []);
+
+  const fetchLeads = async () => {
+    try {
+      const response = await leadsApi.getAll() as any;
+      setLeads(response || []);
+    } catch (error) {
+      console.error('Failed to fetch leads:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddLead = async (leadData: any) => {
+    try {
+      await leadsApi.create(leadData);
+      setIsAddModalOpen(false);
+      fetchLeads();
+      alert('Lead created successfully!');
+    } catch (error) {
+      console.error('Failed to create lead:', error);
+      alert('Failed to create lead. Please try again.');
+    }
+  };
+
+  const handleConvertToDeal = async (dealData: {
+    title: string;
+    description?: string;
+    value: number;
+    probability?: number;
+    expectedCloseDate?: string;
+    stageId: string;
+  }) => {
+    if (!selectedLead) return;
+    
+    try {
+      await leadsApi.convertToProject(selectedLead.id, dealData);
+      setIsConvertModalOpen(false);
+      setSelectedLead(null);
+      fetchLeads(); // Refresh the leads list
+      alert('Lead successfully converted to project!');
+    } catch (error) {
+      console.error('Failed to convert lead:', error);
+      alert('Failed to convert lead. Please try again.');
+    }
+  };
+
+  const handleOpenConvertModal = (lead: any) => {
+    setSelectedLead(lead);
+    setIsConvertModalOpen(true);
+  };
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (!confirm('Are you sure you want to delete this lead?')) return;
+    
+    try {
+      await leadsApi.delete(leadId);
+      fetchLeads(); // Refresh the leads list
+      alert('Lead deleted successfully!');
+    } catch (error) {
+      console.error('Failed to delete lead:', error);
+      alert('Failed to delete lead. Please try again.');
+    }
   };
 
   const filteredLeads = leads.filter((lead) => {
-    const matchesSearch = lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         lead.company?.toLowerCase().includes(searchTerm.toLowerCase());
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = !searchTerm || 
+                         (lead.title?.toLowerCase().includes(searchLower)) ||
+                         (lead.description?.toLowerCase().includes(searchLower)) ||
+                         (lead.source?.toLowerCase().includes(searchLower));
     const matchesStatus = !statusFilter || lead.status === statusFilter;
     const matchesSource = !sourceFilter || lead.source === sourceFilter;
-    const matchesAssigned = !assignedFilter || lead.assignedTo === assignedFilter;
+    // Note: assignedTo field doesn't exist in Lead model, removing for now
     
-    return matchesSearch && matchesStatus && matchesSource && matchesAssigned;
+    return matchesSearch && matchesStatus && matchesSource;
   });
 
   // Get unique values for filters
-  const uniqueSources = Array.from(new Set(leads.map(lead => lead.source)));
-  const uniqueAssignees = Array.from(new Set(leads.map(lead => lead.assignedTo).filter(Boolean)));
+  const uniqueSources = Array.from(new Set(leads.map(lead => lead.source).filter(Boolean)));
+  // Note: assignedTo field doesn't exist in Lead model, removing assignee filter
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -163,7 +243,7 @@ export default function LeadsPage() {
                   <dl>
                     <dt className="text-sm font-medium text-gray-500 truncate">Total Value</dt>
                     <dd className="text-lg font-medium text-gray-900">
-                      {formatCurrency(leads.reduce((sum, lead) => sum + lead.value, 0))}
+                      {formatCurrency(leads.reduce((sum, lead) => sum + (lead.estimatedValue || 0), 0))}
                     </dd>
                   </dl>
                 </div>
@@ -206,16 +286,6 @@ export default function LeadsPage() {
                 <option value="">All Sources</option>
                 {uniqueSources.map(source => (
                   <option key={source} value={source}>{source}</option>
-                ))}
-              </select>
-              <select
-                value={assignedFilter}
-                onChange={(e) => setAssignedFilter(e.target.value)}
-                className="rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
-              >
-                <option value="">All Assignees</option>
-                {uniqueAssignees.map(assignee => (
-                  <option key={assignee} value={assignee}>{assignee}</option>
                 ))}
               </select>
             </div>
@@ -261,19 +331,24 @@ export default function LeadsPage() {
                             <div className="flex-shrink-0 h-10 w-10">
                               <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
                                 <span className="text-sm font-medium text-gray-700">
-                                  {lead.name.split(' ').map(n => n[0]).join('')}
+                                  {(lead.title || 'L').charAt(0).toUpperCase()}
                                 </span>
                               </div>
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">{lead.name}</div>
-                              <div className="text-sm text-gray-500">{lead.company}</div>
+                              <Link 
+                                href={`/leads/${lead.id}`}
+                                className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                              >
+                                {lead.title}
+                              </Link>
+                              <div className="text-sm text-gray-500">{lead.description || 'No description'}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-900">{lead.email}</div>
-                          <div className="text-sm text-gray-500">{lead.phone}</div>
+                          <div className="text-sm text-gray-900">Via Account</div>
+                          <div className="text-sm text-gray-500">{lead.source || 'Unknown'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${statusColors[lead.status as keyof typeof statusColors]}`}>
@@ -281,7 +356,7 @@ export default function LeadsPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(lead.value)}
+                          {formatCurrency(lead.estimatedValue || 0)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${sourceColors[lead.source as keyof typeof sourceColors] || 'bg-gray-50 text-gray-700'}`}>
@@ -294,13 +369,21 @@ export default function LeadsPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
                             type="button"
+                            onClick={() => handleOpenConvertModal(lead)}
+                            className="text-green-600 hover:text-green-900 mr-3"
+                            disabled={lead.status === 'WON' || lead.status === 'LOST'}
+                          >
+                            Convert
+                          </button>
+                          <button
+                            type="button"
                             className="text-indigo-600 hover:text-indigo-900 mr-3"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
-                            onClick={() => deleteLead(lead.id)}
+                            onClick={() => handleDeleteLead(lead.id)}
                             className="text-red-600 hover:text-red-900"
                           >
                             Delete
@@ -327,6 +410,20 @@ export default function LeadsPage() {
         onClose={() => setIsAddModalOpen(false)}
         onSubmit={handleAddLead}
       />
+
+      {/* Convert Lead to Deal Modal */}
+      {selectedLead && (
+        <ConvertLeadToDealModal
+          isOpen={isConvertModalOpen}
+          onClose={() => {
+            setIsConvertModalOpen(false);
+            setSelectedLead(null);
+          }}
+          onConvert={handleConvertToDeal}
+          leadTitle={selectedLead?.title || 'Lead'}
+          leadValue={selectedLead?.estimatedValue || 0}
+        />
+      )}
     </DashboardLayout>
   );
 }

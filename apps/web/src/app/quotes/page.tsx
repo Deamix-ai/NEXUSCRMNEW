@@ -1,709 +1,751 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
+import { DashboardLayout } from '@/components/layout/dashboard-layout';
+import { QuoteBuilder } from '@/components/quotes/QuoteBuilder';
+import { ApprovalWorkflow } from '@/components/quotes/ApprovalWorkflow';
+import { ProposalManagement } from '@/components/quotes/ProposalManagement';
+import { QuoteTemplateManager } from '@/components/quotes/QuoteTemplateManager';
+import { 
+  useStartWorkflowInstance,
+  useCreateWorkflowDefinition,
+  useUpdateWorkflowDefinition,
+  useApproveWorkflow,
+  useRejectWorkflow,
+} from '@/hooks/api-hooks';
+import { 
+  FileText,
+  Settings,
+  Users,
+  BarChart3,
+  DollarSign,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  PlusCircle,
+  Filter,
+  Download
+} from 'lucide-react';
 
-interface QuoteItem {
-  id: string;
-  category: string;
-  description: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  total: number;
-}
+// Sample data for the quotes system
+const sampleAccounts = [
+  {
+    id: 'acc-1',
+    name: 'Johnson Construction Ltd',
+    email: 'contact@johnsonconstruction.com',
+    phone: '01234 567890',
+    address: '123 High Street',
+    city: 'Manchester',
+    postcode: 'M1 1AA',
+    industry: 'Construction'
+  },
+  {
+    id: 'acc-2',
+    name: 'Smith Residential Properties',
+    email: 'info@smithproperties.co.uk',
+    phone: '0207 123 4567',
+    address: '456 Park Road',
+    city: 'London',
+    postcode: 'SW1A 1AA',
+    industry: 'Property Development'
+  }
+];
 
-interface QuoteData {
-  id: string;
-  customerName: string;
-  customerEmail: string;
-  customerPhone: string;
-  customerAddress: string;
-  projectTitle: string;
-  projectDescription: string;
-  quoteDate: string;
-  validUntil: string;
-  status: 'draft' | 'sent' | 'approved' | 'rejected';
-  items: QuoteItem[];
-  subtotal: number;
-  vatRate: number;
-  vatAmount: number;
-  total: number;
-  terms: string;
-  notes: string;
-}
+const sampleContacts = [
+  {
+    id: 'cont-1',
+    firstName: 'James',
+    lastName: 'Johnson',
+    email: 'james@johnsonconstruction.com',
+    phone: '01234 567891',
+    jobTitle: 'Project Manager',
+    accountId: 'acc-1'
+  },
+  {
+    id: 'cont-2',
+    firstName: 'Sarah',
+    lastName: 'Smith',
+    email: 'sarah@smithproperties.co.uk',
+    phone: '0207 123 4568',
+    jobTitle: 'Development Director',
+    accountId: 'acc-2'
+  }
+];
 
-const defaultTerms = `Terms & Conditions:
-1. This quote is valid for 30 days from the date above
-2. A 25% deposit is required to commence work
-3. Payment terms: Net 30 days from invoice date
-4. All materials are covered by manufacturer warranty
-5. Labour warranty: 12 months from completion
-6. Access to site must be provided during normal working hours
-7. Any variations to the quoted work will be charged separately
-8. Client is responsible for obtaining necessary permits/permissions`;
+const sampleUsers = [
+  {
+    id: 'user-1',
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'john.doe@company.com',
+    role: 'Sales Manager',
+    department: 'Sales',
+    isActive: true
+  },
+  {
+    id: 'user-2',
+    firstName: 'Jane',
+    lastName: 'Smith',
+    email: 'jane.smith@company.com',
+    role: 'Senior Designer',
+    department: 'Design',
+    isActive: true
+  }
+];
 
-export default function QuoteGeneratorPage() {
-  const [quote, setQuote] = useState<QuoteData>({
-    id: `QUO-${Date.now()}`,
-    customerName: '',
-    customerEmail: '',
-    customerPhone: '',
-    customerAddress: '',
-    projectTitle: '',
-    projectDescription: '',
-    quoteDate: new Date().toISOString().split('T')[0],
-    validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    status: 'draft',
-    items: [],
-    subtotal: 0,
-    vatRate: 20,
-    vatAmount: 0,
-    total: 0,
-    terms: defaultTerms,
-    notes: ''
-  });
-
-  const [newItem, setNewItem] = useState<Partial<QuoteItem>>({
-    category: '',
-    description: '',
-    quantity: 1,
-    unit: 'each',
-    unitPrice: 0
-  });
-
-  const [isPreviewMode, setIsPreviewMode] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
-
-  const categories = [
-    'Labour',
-    'Materials - Sanitaryware',
-    'Materials - Tiling',
-    'Materials - Plumbing',
-    'Materials - Electrical',
-    'Materials - Fixtures',
-    'Materials - Other',
-    'Equipment Hire',
-    'Disposal',
-    'Miscellaneous'
-  ];
-
-  const units = ['each', 'sqm', 'linear m', 'hours', 'days', 'lot'];
-
-  const calculateTotals = (items: QuoteItem[]) => {
-    const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-    const vatAmount = (subtotal * quote.vatRate) / 100;
-    const total = subtotal + vatAmount;
-    
-    setQuote(prev => ({
-      ...prev,
-      subtotal,
-      vatAmount,
-      total
-    }));
-  };
-
-  const addItem = () => {
-    if (!newItem.description || !newItem.quantity || !newItem.unitPrice) return;
-
-    const item: QuoteItem = {
-      id: Date.now().toString(),
-      category: newItem.category || 'Miscellaneous',
-      description: newItem.description,
-      quantity: newItem.quantity || 1,
-      unit: newItem.unit || 'each',
-      unitPrice: newItem.unitPrice || 0,
-      total: (newItem.quantity || 1) * (newItem.unitPrice || 0)
-    };
-
-    const updatedItems = [...quote.items, item];
-    setQuote(prev => ({ ...prev, items: updatedItems }));
-    calculateTotals(updatedItems);
-
-    setNewItem({
-      category: '',
-      description: '',
-      quantity: 1,
-      unit: 'each',
-      unitPrice: 0
-    });
-  };
-
-  const removeItem = (id: string) => {
-    const updatedItems = quote.items.filter(item => item.id !== id);
-    setQuote(prev => ({ ...prev, items: updatedItems }));
-    calculateTotals(updatedItems);
-  };
-
-  const updateItem = (id: string, field: keyof QuoteItem, value: any) => {
-    const updatedItems = quote.items.map(item => {
-      if (item.id === id) {
-        const updated = { ...item, [field]: value };
-        if (field === 'quantity' || field === 'unitPrice') {
-          updated.total = updated.quantity * updated.unitPrice;
+const sampleQuoteTemplates = [
+  {
+    id: 'temp-1',
+    name: 'Standard Bathroom Renovation',
+    description: 'Complete bathroom renovation package including design, materials, and installation',
+    category: 'Bathroom',
+    industry: 'Residential',
+    items: [
+      {
+        id: 'item-1',
+        name: 'Premium Bathroom Suite',
+        description: 'Complete luxury bathroom suite including toilet, basin, and bath',
+        category: 'Bathroom Suites',
+        quantity: 1,
+        unitPrice: 1250.00,
+        discount: 0,
+        discountType: 'percentage' as const,
+        total: 1250.00,
+        isOptional: false
+      },
+      {
+        id: 'item-2',
+        name: 'Professional Installation',
+        description: 'Complete installation service by certified professionals',
+        category: 'Labour',
+        quantity: 1,
+        unitPrice: 850.00,
+        discount: 0,
+        discountType: 'percentage' as const,
+        total: 850.00,
+        isOptional: false
+      }
+    ],
+    terms: 'All work guaranteed for 12 months. Materials warranty as per manufacturer terms. Payment due within 30 days.',
+    validityDays: 30,
+    isDefault: true,
+    isActive: true,
+    sections: [
+      {
+        id: 'sec-1',
+        type: 'header' as const,
+        title: 'Project Overview',
+        content: 'Complete bathroom renovation including design consultation, materials supply, and professional installation.',
+        order: 0,
+        isVisible: true,
+        isEditable: true,
+        styles: {
+          fontSize: 18,
+          fontWeight: 'bold' as const,
+          textAlign: 'center' as const,
+          color: '#1f2937',
+          backgroundColor: '#f9fafb',
+          padding: 16
         }
-        return updated;
+      },
+      {
+        id: 'sec-2',
+        type: 'table' as const,
+        title: 'Materials & Labour',
+        content: 'Detailed breakdown of materials and labour costs',
+        order: 1,
+        isVisible: true,
+        isEditable: true,
+        styles: {
+          fontSize: 14,
+          textAlign: 'left' as const,
+          padding: 12
+        }
       }
-      return item;
-    });
-    
-    setQuote(prev => ({ ...prev, items: updatedItems }));
-    calculateTotals(updatedItems);
+    ],
+    variables: [
+      {
+        id: 'var-1',
+        name: 'customer_name',
+        label: 'Customer Name',
+        type: 'text' as const,
+        isRequired: true,
+        description: 'Name of the customer'
+      },
+      {
+        id: 'var-2',
+        name: 'project_value',
+        label: 'Project Value',
+        type: 'currency' as const,
+        isRequired: true,
+        description: 'Total project value'
+      }
+    ],
+    settings: {
+      paperSize: 'A4' as const,
+      orientation: 'portrait' as const,
+      margins: { top: 20, bottom: 20, left: 20, right: 20 },
+      branding: {
+        logoPosition: 'left' as const,
+        logoSize: 'medium' as const,
+        primaryColor: '#3b82f6',
+        secondaryColor: '#64748b',
+        fontFamily: 'Arial',
+        showWatermark: false
+      },
+      header: {
+        showPageNumbers: true,
+        showDate: true,
+        showCompanyInfo: true,
+        height: 80
+      },
+      footer: {
+        showTerms: true,
+        showSignature: true,
+        showContact: true,
+        height: 60
+      }
+    },
+    usageCount: 45,
+    averageValue: 8500,
+    conversionRate: 68.5,
+    createdBy: 'user-1',
+    createdAt: '2024-01-15T10:00:00Z',
+    updatedAt: '2024-09-01T14:30:00Z'
+  }
+];
+
+const sampleProductCatalog = [
+  {
+    id: 'prod-1',
+    name: 'Premium Bathroom Suite',
+    description: 'Complete luxury bathroom suite including toilet, basin, and bath',
+    category: 'Bathroom Suites',
+    quantity: 1,
+    unitPrice: 1250.00,
+    discount: 0,
+    discountType: 'percentage' as const,
+    total: 1250.00,
+    isOptional: false
+  },
+  {
+    id: 'prod-2',
+    name: 'Professional Installation',
+    description: 'Complete installation service by certified professionals',
+    category: 'Labour',
+    quantity: 1,
+    unitPrice: 850.00,
+    discount: 0,
+    discountType: 'percentage' as const,
+    total: 850.00,
+    isOptional: false
+  }
+];
+
+const sampleQuotes = [
+  {
+    id: 'quote-1',
+    quoteNumber: 'Q-2024-001',
+    title: 'Bathroom Renovation - Johnson Residence',
+    total: 8500.00,
+    accountName: 'Johnson Construction Ltd',
+    contactName: 'James Johnson',
+    status: 'sent',
+    createdAt: '2024-09-01T10:00:00Z'
+  },
+  {
+    id: 'quote-2',
+    quoteNumber: 'Q-2024-002',
+    title: 'Kitchen Renovation - Smith Property',
+    total: 12750.00,
+    accountName: 'Smith Residential Properties',
+    contactName: 'Sarah Smith',
+    status: 'draft',
+    createdAt: '2024-09-05T14:30:00Z'
+  }
+];
+
+const sampleApprovals = [
+  {
+    id: 'app-1',
+    quoteId: 'quote-1',
+    workflowId: 'wf-1',
+    status: 'pending' as const,
+    currentStepId: 'step-1',
+    requestedBy: 'user-1',
+    requestedAt: '2024-09-01T10:00:00Z',
+    priority: 'medium' as const,
+    totalAmount: 8500.00,
+    steps: [
+      {
+        id: 'step-1',
+        name: 'Manager Approval',
+        description: 'Requires approval from department manager',
+        approverRole: 'Manager',
+        approverIds: ['user-1'],
+        order: 0,
+        isRequired: true,
+        timeoutDays: 3
+      }
+    ],
+    actions: [],
+    notifications: {
+      emailSent: true,
+      remindersSent: 0
+    }
+  }
+];
+
+const sampleWorkflows = [
+  {
+    id: 'wf-1',
+    name: 'Standard Approval Workflow',
+    description: 'Standard approval process for quotes over £5,000',
+    isActive: true,
+    steps: [
+      {
+        id: 'step-1',
+        name: 'Manager Approval',
+        description: 'Department manager approval',
+        approverRole: 'Manager',
+        approverIds: ['user-1'],
+        order: 0,
+        isRequired: true,
+        timeoutDays: 3
+      }
+    ],
+    conditions: {
+      minimumAmount: 5000
+    },
+    settings: {
+      autoApprovalEnabled: false,
+      reminderFrequencyDays: 1,
+      escalationEnabled: true,
+      escalationDays: 3
+    },
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-09-01T00:00:00Z'
+  }
+];
+
+const sampleProposals = [
+  {
+    id: 'prop-1',
+    proposalNumber: 'P-2024-001',
+    title: 'Complete Home Renovation Project',
+    description: 'Comprehensive renovation including bathroom, kitchen, and living areas',
+    quoteId: 'quote-1',
+    accountId: 'acc-1',
+    contactId: 'cont-1',
+    ownerId: 'user-1',
+    templateId: 'temp-1',
+    status: 'sent' as const,
+    priority: 'high' as const,
+    sections: [],
+    totalValue: 25000.00,
+    validUntil: '2024-12-31',
+    tags: ['renovation', 'residential'],
+    customFields: {},
+    tracking: {
+      sentAt: '2024-09-01T10:00:00Z',
+      viewedAt: '2024-09-02T15:30:00Z',
+      lastViewedAt: '2024-09-05T09:15:00Z',
+      viewCount: 5,
+      timeSpentViewing: 420,
+      sectionsViewed: ['sec-1', 'sec-2']
+    },
+    collaboration: {
+      comments: [],
+      reviewers: [],
+      approvers: [],
+      isLocked: false
+    },
+    version: 1,
+    createdAt: '2024-09-01T10:00:00Z',
+    updatedAt: '2024-09-05T09:15:00Z'
+  }
+];
+
+const sampleProposalTemplates = [
+  {
+    id: 'ptemp-1',
+    name: 'Residential Renovation Proposal',
+    description: 'Complete proposal template for residential renovation projects',
+    category: 'Renovation',
+    industry: 'Residential',
+    sections: [],
+    variables: {},
+    settings: {
+      branding: {
+        primaryColor: '#3b82f6',
+        secondaryColor: '#64748b',
+        fontFamily: 'Arial'
+      },
+      layout: {
+        headerHeight: 80,
+        footerHeight: 60,
+        margins: { top: 20, bottom: 20, left: 20, right: 20 }
+      }
+    },
+    isDefault: true,
+    isActive: true,
+    createdAt: '2024-01-01T00:00:00Z',
+    updatedAt: '2024-09-01T00:00:00Z'
+  }
+];
+
+const sampleAnalytics = {
+  totalProposals: 25,
+  conversionRate: 42.5,
+  averageResponseTime: 3.2,
+  averageViewTime: 8.5,
+  topPerformingSections: [
+    {
+      sectionId: 'sec-1',
+      sectionTitle: 'Project Overview',
+      viewRate: 95.2,
+      engagementScore: 8.7
+    }
+  ],
+  statusBreakdown: {
+    draft: 8,
+    sent: 12,
+    viewed: 3,
+    accepted: 2
+  },
+  monthlyTrends: [
+    { month: 'Aug', sent: 15, accepted: 6, value: 125000 },
+    { month: 'Sep', sent: 18, accepted: 8, value: 165000 }
+  ]
+};
+
+const QuotesPage = () => {
+  const [activeTab, setActiveTab] = useState<'quotes' | 'approvals' | 'proposals' | 'templates'>('quotes');
+  const [showQuoteBuilder, setShowQuoteBuilder] = useState(false);
+
+  // Workflow hooks
+  const startWorkflowInstance = useStartWorkflowInstance();
+  const createWorkflowDefinition = useCreateWorkflowDefinition();
+  const updateWorkflowDefinition = useUpdateWorkflowDefinition();
+  const approveWorkflow = useApproveWorkflow();
+  const rejectWorkflow = useRejectWorkflow();
+
+  // Sample handlers
+  const handleSaveQuote = (quote: any) => {
+    console.log('Saving quote:', quote);
+    setShowQuoteBuilder(false);
   };
 
-  const generatePDF = () => {
-    if (printRef.current) {
-      const printWindow = window.open('', '_blank');
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Quote ${quote.id}</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-                .quote-header { border-bottom: 2px solid #2563eb; padding-bottom: 20px; margin-bottom: 30px; }
-                .company-info { text-align: right; }
-                .quote-info { margin: 20px 0; }
-                .customer-info { background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; }
-                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                th, td { padding: 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-                th { background: #f1f5f9; font-weight: bold; }
-                .totals { margin-top: 20px; }
-                .totals table { width: 50%; margin-left: auto; }
-                .terms { margin-top: 30px; font-size: 12px; }
-                .total-row { font-weight: bold; background: #f1f5f9; }
-                @media print { body { margin: 0; } }
-              </style>
-            </head>
-            <body>
-              ${printRef.current.innerHTML}
-            </body>
-          </html>
-        `);
-        printWindow.document.close();
-        printWindow.print();
+  const handleSendQuote = (quote: any) => {
+    console.log('Sending quote:', quote);
+    setShowQuoteBuilder(false);
+  };
+
+  const handlePreviewQuote = (quote: any) => {
+    console.log('Previewing quote:', quote);
+  };
+
+  const handleDuplicateQuote = (quote: any) => {
+    console.log('Duplicating quote:', quote);
+  };
+
+  const handleApprove = (approvalId: string, stepId: string, comments?: string) => {
+    approveWorkflow.mutate({
+      approvalId,
+      data: { comments: comments || '' }
+    });
+  };
+
+  const handleReject = (approvalId: string, stepId: string, comments: string) => {
+    rejectWorkflow.mutate({
+      approvalId,
+      data: { comments, reason: 'Rejected via workflow' }
+    });
+  };
+
+  const handleRequestApproval = (quoteId: string, workflowId: string, priority: string) => {
+    startWorkflowInstance.mutate({
+      workflowId,
+      entityType: 'Quote',
+      entityId: quoteId,
+      priority: priority.toUpperCase() as any,
+      metadata: { 
+        quote: sampleQuotes.find(q => q.id === quoteId),
+        requestedBy: 'current-user' // Should get from auth context
       }
+    });
+  };
+
+  const handleUpdateWorkflow = (workflow: any) => {
+    if (workflow.id) {
+      updateWorkflowDefinition.mutate({
+        id: workflow.id,
+        data: workflow
+      });
+    } else {
+      createWorkflowDefinition.mutate(workflow);
     }
   };
 
-  const saveQuote = () => {
-    // Here you would save to your backend
-    console.log('Saving quote:', quote);
-    alert('Quote saved successfully!');
+  const handleCancelApproval = (approvalId: string, reason: string) => {
+    console.log('Cancelling approval:', { approvalId, reason });
   };
 
-  const sendQuote = () => {
-    // Here you would send the quote via email
-    setQuote(prev => ({ ...prev, status: 'sent' }));
-    alert('Quote sent to customer!');
+  const handleCreateProposal = (proposal: any) => {
+    console.log('Creating proposal:', proposal);
   };
 
-  if (isPreviewMode) {
-    return (
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="mb-6 flex justify-between items-center">
-            <button
-              onClick={() => setIsPreviewMode(false)}
-              className="px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50"
-            >
-              ← Back to Edit
-            </button>
-            <div className="space-x-3">
-              <button
-                onClick={generatePDF}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Download PDF
-              </button>
-              <button
-                onClick={sendQuote}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-              >
-                Send to Customer
-              </button>
-            </div>
-          </div>
+  const handleUpdateProposal = (proposalId: string, updates: any) => {
+    console.log('Updating proposal:', { proposalId, updates });
+  };
 
-          <div ref={printRef} className="bg-white rounded-lg shadow-sm p-8">
-            {/* Quote Header */}
-            <div className="quote-header">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">QUOTATION</h1>
-                  <p className="text-lg text-gray-600 mt-1">#{quote.id}</p>
-                </div>
-                <div className="company-info text-right">
-                  <div className="text-xl font-bold text-blue-600">Bowmans Kitchens & Bathrooms</div>
-                  <div className="text-sm text-gray-600 mt-2">
-                    Bowman Bathrooms Ltd<br/>
-                    Trading as Bowmans Kitchens & Bathrooms<br/>
-                    VAT No: GB435232714<br/>
-                    Company Reg: 14004226<br/>
-                    Tel: 0161 123 4567<br/>
-                    Email: info@bowmanskb.co.uk
-                  </div>
-                </div>
-              </div>
-            </div>
+  const handleDeleteProposal = (proposalId: string) => {
+    console.log('Deleting proposal:', proposalId);
+  };
 
-            {/* Quote Information */}
-            <div className="quote-info grid grid-cols-2 gap-8">
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Quote Date</h3>
-                <p>{new Date(quote.quoteDate).toLocaleDateString()}</p>
-                
-                <h3 className="font-semibold text-gray-900 mb-2 mt-4">Valid Until</h3>
-                <p>{new Date(quote.validUntil).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Project</h3>
-                <p className="font-medium">{quote.projectTitle}</p>
-                <p className="text-gray-600 text-sm mt-1">{quote.projectDescription}</p>
-              </div>
-            </div>
+  const handleSendProposal = (proposalId: string) => {
+    console.log('Sending proposal:', proposalId);
+  };
 
-            {/* Customer Information */}
-            <div className="customer-info">
-              <h3 className="font-semibold text-gray-900 mb-3">Customer Details</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="font-medium">{quote.customerName}</p>
-                  <p className="text-sm text-gray-600">{quote.customerEmail}</p>
-                  <p className="text-sm text-gray-600">{quote.customerPhone}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 whitespace-pre-line">{quote.customerAddress}</p>
-                </div>
-              </div>
-            </div>
+  const handleDuplicateProposal = (proposalId: string) => {
+    console.log('Duplicating proposal:', proposalId);
+  };
 
-            {/* Items Table */}
-            <table>
-              <thead>
-                <tr>
-                  <th>Category</th>
-                  <th>Description</th>
-                  <th>Qty</th>
-                  <th>Unit</th>
-                  <th>Unit Price</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quote.items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="text-sm text-gray-600">{item.category}</td>
-                    <td>{item.description}</td>
-                    <td>{item.quantity}</td>
-                    <td>{item.unit}</td>
-                    <td>£{item.unitPrice.toFixed(2)}</td>
-                    <td>£{item.total.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+  const handleAddComment = (proposalId: string, comment: any) => {
+    console.log('Adding comment:', { proposalId, comment });
+  };
 
-            {/* Totals */}
-            <div className="totals">
-              <table>
-                <tbody>
-                  <tr>
-                    <td>Subtotal:</td>
-                    <td className="text-right">£{quote.subtotal.toFixed(2)}</td>
-                  </tr>
-                  <tr>
-                    <td>VAT ({quote.vatRate}%):</td>
-                    <td className="text-right">£{quote.vatAmount.toFixed(2)}</td>
-                  </tr>
-                  <tr className="total-row">
-                    <td><strong>Total:</strong></td>
-                    <td className="text-right"><strong>£{quote.total.toFixed(2)}</strong></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+  const handleCreateTemplate = (template: any) => {
+    console.log('Creating template:', template);
+  };
 
-            {/* Notes */}
-            {quote.notes && (
-              <div className="mt-6">
-                <h3 className="font-semibold text-gray-900 mb-2">Additional Notes</h3>
-                <p className="text-gray-600 whitespace-pre-line">{quote.notes}</p>
-              </div>
-            )}
+  const handleUpdateTemplate = (templateId: string, updates: any) => {
+    console.log('Updating template:', { templateId, updates });
+  };
 
-            {/* Terms */}
-            <div className="terms">
-              <h3 className="font-semibold text-gray-900 mb-2">Terms & Conditions</h3>
-              <pre className="text-gray-600 whitespace-pre-wrap text-xs">{quote.terms}</pre>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleUpdateProposalTemplate = (template: any) => {
+    console.log('Updating proposal template:', template);
+  };
+
+  const handleDeleteTemplate = (templateId: string) => {
+    console.log('Deleting template:', templateId);
+  };
+
+  const handleDuplicateTemplate = (templateId: string) => {
+    console.log('Duplicating template:', templateId);
+  };
+
+  const handlePreviewTemplate = (template: any) => {
+    console.log('Previewing template:', template);
+  };
+
+  const handleExportTemplate = (templateId: string) => {
+    console.log('Exporting template:', templateId);
+  };
+
+  const handleImportTemplate = (templateData: any) => {
+    console.log('Importing template:', templateData);
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="mb-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Quote Generator</h1>
-              <p className="text-gray-600 mt-1">Create professional quotes for your projects</p>
+    <DashboardLayout>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 bg-blue-600 rounded-lg">
+                <FileText className="h-8 w-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">
+                  Quote & Proposal Management
+                </h1>
+                <p className="text-gray-600">
+                  Professional quote generation, proposal management, and approval workflows
+                </p>
+              </div>
             </div>
-            <div className="flex space-x-3">
-              <button
-                onClick={saveQuote}
-                className="px-4 py-2 text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50"
-              >
-                Save Draft
-              </button>
-              <button
-                onClick={() => setIsPreviewMode(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Preview & Send
-              </button>
+
+            {/* Key Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-blue-100">Active Quotes</p>
+                    <p className="text-2xl font-bold">24</p>
+                  </div>
+                  <FileText className="h-8 w-8 text-blue-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  <span className="text-sm">+15% this month</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-green-500 to-green-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-green-100">Quote Value</p>
+                    <p className="text-2xl font-bold">£186K</p>
+                  </div>
+                  <DollarSign className="h-8 w-8 text-green-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  <span className="text-sm">+28% increase</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-purple-100">Conversion Rate</p>
+                    <p className="text-2xl font-bold">42.5%</p>
+                  </div>
+                  <BarChart3 className="h-8 w-8 text-purple-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <TrendingUp className="h-4 w-4 mr-1" />
+                  <span className="text-sm">+5.2% improvement</span>
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-6 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-orange-100">Avg Response</p>
+                    <p className="text-2xl font-bold">2.4 days</p>
+                  </div>
+                  <Clock className="h-8 w-8 text-orange-200" />
+                </div>
+                <div className="mt-4 flex items-center">
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  <span className="text-sm">Within target</span>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Quote Details */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Basic Information */}
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Quote Information</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Quote ID</label>
-                    <input
-                      type="text"
-                      value={quote.id}
-                      onChange={(e) => setQuote(prev => ({ ...prev, id: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Quote Date</label>
-                    <input
-                      type="date"
-                      value={quote.quoteDate}
-                      onChange={(e) => setQuote(prev => ({ ...prev, quoteDate: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until</label>
-                  <input
-                    type="date"
-                    value={quote.validUntil}
-                    onChange={(e) => setQuote(prev => ({ ...prev, validUntil: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Customer Information */}
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Customer Details</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Customer Name</label>
-                    <input
-                      type="text"
-                      value={quote.customerName}
-                      onChange={(e) => setQuote(prev => ({ ...prev, customerName: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={quote.customerEmail}
-                      onChange={(e) => setQuote(prev => ({ ...prev, customerEmail: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                    <input
-                      type="tel"
-                      value={quote.customerPhone}
-                      onChange={(e) => setQuote(prev => ({ ...prev, customerPhone: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Project Title</label>
-                    <input
-                      type="text"
-                      value={quote.projectTitle}
-                      onChange={(e) => setQuote(prev => ({ ...prev, projectTitle: e.target.value }))}
-                      placeholder="e.g., Master Bathroom Renovation"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Customer Address</label>
-                  <textarea
-                    value={quote.customerAddress}
-                    onChange={(e) => setQuote(prev => ({ ...prev, customerAddress: e.target.value }))}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Project Description</label>
-                  <textarea
-                    value={quote.projectDescription}
-                    onChange={(e) => setQuote(prev => ({ ...prev, projectDescription: e.target.value }))}
-                    rows={3}
-                    placeholder="Describe the scope of work..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Quote Items */}
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Quote Items</h2>
-              </div>
-              
-              {/* Add New Item */}
-              <div className="p-6 border-b border-gray-200 bg-gray-50">
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
-                  <select
-                    value={newItem.category}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, category: e.target.value }))}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Category</option>
-                    {categories.map(cat => (
-                      <option key={cat} value={cat}>{cat}</option>
-                    ))}
-                  </select>
-                  
-                  <input
-                    type="text"
-                    value={newItem.description}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Description"
-                    className="md:col-span-2 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  
-                  <input
-                    type="number"
-                    value={newItem.quantity}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-                    placeholder="Qty"
-                    min="0"
-                    step="0.1"
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  
-                  <select
-                    value={newItem.unit}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, unit: e.target.value }))}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {units.map(unit => (
-                      <option key={unit} value={unit}>{unit}</option>
-                    ))}
-                  </select>
-                  
-                  <input
-                    type="number"
-                    value={newItem.unitPrice}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || 0 }))}
-                    placeholder="£ Price"
-                    min="0"
-                    step="0.01"
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
+          {/* Navigation Tabs */}
+          <div className="border-b border-gray-200 mb-8">
+            <nav className="-mb-px flex space-x-8">
+              {[
+                { id: 'quotes', label: 'Quote Builder', icon: FileText },
+                { id: 'approvals', label: 'Approval Workflow', icon: CheckCircle },
+                { id: 'proposals', label: 'Proposal Management', icon: Users },
+                { id: 'templates', label: 'Template Manager', icon: Settings }
+              ].map(tab => (
                 <button
-                  onClick={addItem}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab.id
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
                 >
-                  Add Item
+                  <tab.icon className="h-5 w-5" />
+                  <span>{tab.label}</span>
                 </button>
-              </div>
-
-              {/* Items List */}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Category</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Description</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Qty</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Unit</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Price</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Total</th>
-                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {quote.items.map((item) => (
-                      <tr key={item.id}>
-                        <td className="px-4 py-3 text-sm text-gray-600">{item.category}</td>
-                        <td className="px-4 py-3">
-                          <input
-                            type="text"
-                            value={item.description}
-                            onChange={(e) => updateItem(item.id, 'description', e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
-                            className="w-20 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            min="0"
-                            step="0.1"
-                          />
-                        </td>
-                        <td className="px-4 py-3 text-sm">{item.unit}</td>
-                        <td className="px-4 py-3">
-                          <input
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) => updateItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
-                            className="w-24 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                            min="0"
-                            step="0.01"
-                          />
-                        </td>
-                        <td className="px-4 py-3 font-medium">£{item.total.toFixed(2)}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => removeItem(item.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Additional Notes */}
-            <div className="bg-white rounded-lg shadow-sm">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Additional Information</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                  <textarea
-                    value={quote.notes}
-                    onChange={(e) => setQuote(prev => ({ ...prev, notes: e.target.value }))}
-                    rows={3}
-                    placeholder="Any additional notes or special conditions..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Terms & Conditions</label>
-                  <textarea
-                    value={quote.terms}
-                    onChange={(e) => setQuote(prev => ({ ...prev, terms: e.target.value }))}
-                    rows={8}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-            </div>
+              ))}
+            </nav>
           </div>
 
-          {/* Quote Summary */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-lg shadow-sm sticky top-8">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-900">Quote Summary</h2>
-              </div>
-              <div className="p-6 space-y-4">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Items:</span>
-                  <span className="font-medium">{quote.items.length}</span>
-                </div>
-                
-                <div className="border-t pt-4 space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span className="font-medium">£{quote.subtotal.toFixed(2)}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">VAT Rate:</span>
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="number"
-                        value={quote.vatRate}
-                        onChange={(e) => {
-                          const rate = parseFloat(e.target.value) || 0;
-                          const vatAmount = (quote.subtotal * rate) / 100;
-                          setQuote(prev => ({
-                            ...prev,
-                            vatRate: rate,
-                            vatAmount,
-                            total: quote.subtotal + vatAmount
-                          }));
-                        }}
-                        className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                      />
-                      <span className="text-sm">%</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">VAT Amount:</span>
-                    <span className="font-medium">£{quote.vatAmount.toFixed(2)}</span>
-                  </div>
-                  
-                  <div className="border-t pt-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-lg font-semibold">Total:</span>
-                      <span className="text-2xl font-bold text-green-600">£{quote.total.toFixed(2)}</span>
-                    </div>
+          {/* Content */}
+          {activeTab === 'quotes' && (
+            <div className="space-y-6">
+              {!showQuoteBuilder ? (
+                <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
+                  <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-xl font-medium text-gray-900 mb-2">Professional Quote Builder</h3>
+                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto">
+                    Create professional quotes with customizable templates, pricing calculators, 
+                    and automated workflows. Track quote performance and conversion rates.
+                  </p>
+                  <div className="flex items-center justify-center space-x-4">
+                    <button
+                      onClick={() => setShowQuoteBuilder(true)}
+                      className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      <PlusCircle className="h-5 w-5" />
+                      <span>Create New Quote</span>
+                    </button>
+                    <button className="flex items-center space-x-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50">
+                      <Filter className="h-5 w-5" />
+                      <span>View Existing Quotes</span>
+                    </button>
                   </div>
                 </div>
-
-                <div className="border-t pt-4">
-                  <div className="text-sm text-gray-600 space-y-1">
-                    <div>Status: <span className="font-medium capitalize">{quote.status}</span></div>
-                    <div>Valid until: <span className="font-medium">{new Date(quote.validUntil).toLocaleDateString()}</span></div>
-                  </div>
-                </div>
-              </div>
+              ) : (
+                <QuoteBuilder
+                  accounts={sampleAccounts}
+                  contacts={sampleContacts}
+                  templates={sampleQuoteTemplates}
+                  productCatalog={sampleProductCatalog}
+                  onSave={handleSaveQuote}
+                  onSend={handleSendQuote}
+                  onPreview={handlePreviewQuote}
+                  onDuplicate={handleDuplicateQuote}
+                />
+              )}
             </div>
-          </div>
+          )}
+
+          {activeTab === 'approvals' && (
+            <ApprovalWorkflow
+              approvals={sampleApprovals}
+              workflows={sampleWorkflows}
+              users={sampleUsers}
+              quotes={sampleQuotes}
+              currentUserId="user-1"
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onRequestApproval={handleRequestApproval}
+              onUpdateWorkflow={handleUpdateWorkflow}
+              onCancelApproval={handleCancelApproval}
+            />
+          )}
+
+          {activeTab === 'proposals' && (
+            <ProposalManagement
+              proposals={sampleProposals}
+              templates={sampleProposalTemplates}
+              accounts={sampleAccounts}
+              contacts={sampleContacts}
+              users={sampleUsers}
+              analytics={sampleAnalytics}
+              onCreateProposal={handleCreateProposal}
+              onUpdateProposal={handleUpdateProposal}
+              onDeleteProposal={handleDeleteProposal}
+              onSendProposal={handleSendProposal}
+              onDuplicateProposal={handleDuplicateProposal}
+              onAddComment={handleAddComment}
+              onUpdateTemplate={handleUpdateProposalTemplate}
+            />
+          )}
+
+          {activeTab === 'templates' && (
+            <QuoteTemplateManager
+              templates={sampleQuoteTemplates}
+              categories={['Bathroom', 'Kitchen', 'General', 'Commercial']}
+              industries={['Residential', 'Commercial', 'Industrial', 'Retail']}
+              onCreateTemplate={handleCreateTemplate}
+              onUpdateTemplate={handleUpdateTemplate}
+              onDeleteTemplate={handleDeleteTemplate}
+              onDuplicateTemplate={handleDuplicateTemplate}
+              onPreviewTemplate={handlePreviewTemplate}
+              onExportTemplate={handleExportTemplate}
+              onImportTemplate={handleImportTemplate}
+            />
+          )}
         </div>
       </div>
-    </div>
+    </DashboardLayout>
   );
-}
+};
+
+export default QuotesPage;
+
+

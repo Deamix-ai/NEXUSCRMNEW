@@ -1,9 +1,10 @@
-'use client';
-
 import { useState } from 'react';
-import { Metadata } from 'next';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { AddLeadModal } from '@/components/leads/add-lead-modal';
+
+'use client';
+
+
 
 // Mock data for leads
 const initialLeads = [

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 
+
+
 // Mock data for reports
 const salesData = {
   monthly: [

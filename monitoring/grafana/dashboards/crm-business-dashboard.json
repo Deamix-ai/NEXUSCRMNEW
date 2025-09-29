@@ -1,0 +1,188 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "CRM Nexus - Business Metrics",
+    "tags": ["crm", "business", "metrics"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Customer Metrics",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "crm_total_customers",
+            "legendFormat": "Total Customers"
+          },
+          {
+            "expr": "crm_new_customers_today",
+            "legendFormat": "New Today"
+          },
+          {
+            "expr": "crm_active_customers",
+            "legendFormat": "Active Customers"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Sales Performance",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "crm_total_revenue_today",
+            "legendFormat": "Today's Revenue"
+          },
+          {
+            "expr": "crm_monthly_revenue",
+            "legendFormat": "Monthly Revenue"
+          },
+          {
+            "expr": "crm_quote_conversion_rate * 100",
+            "legendFormat": "Conversion Rate %"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Quote Pipeline",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "crm_quotes_by_status",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "right"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Lead Sources",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "crm_leads_by_source",
+            "legendFormat": "{{source}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "right"
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Daily Revenue Trend",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(crm_total_revenue[1d])",
+            "legendFormat": "Daily Revenue"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Customer Acquisition",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(crm_new_customers[1h])",
+            "legendFormat": "New Customers/Hour"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Quote Conversion Rate",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "crm_quote_conversion_rate * 100",
+            "legendFormat": "Conversion Rate %"
+          }
+        ],
+        "options": {
+          "legend": {
+            "displayMode": "list",
+            "placement": "bottom"
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Top Performing Staff",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "topk(10, crm_staff_sales_performance)",
+            "legendFormat": "{{staff_name}}"
+          }
+        ],
+        "options": {
+          "showHeader": true
+        }
+      },
+      {
+        "id": 9,
+        "title": "Project Status Distribution",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "crm_projects_by_status",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "options": {
+          "showHeader": true
+        }
+      }
+    ]
+  }
+}

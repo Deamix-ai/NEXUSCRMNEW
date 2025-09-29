@@ -4,16 +4,19 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+
+
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-  { name: 'Leads', href: '/leads', icon: '🎯' },
-  { name: 'Clients', href: '/clients', icon: '👥' },
-  { name: 'Jobs', href: '/jobs', icon: '🔨' },
+  { name: 'Accounts', href: '/accounts', icon: '🏢' },
+  { name: 'Enquiries', href: '/enquiries', icon: '💡' },
+  { name: 'Leads', href: '/leads', icon: '�' },
+  { name: 'Projects', href: '/projects', icon: '🔨' },
   { name: 'Calendar', href: '/calendar', icon: '📅' },
   { name: 'Email Marketing', href: '/email', icon: '📧' },
   { name: 'Payments', href: '/payments', icon: '💳' },
   { name: 'Analytics', href: '/analytics', icon: '📈' },
-  { name: 'Reports', href: '/reports', icon: '�' },
+  { name: 'Reports', href: '/reports', icon: '📋' },
 ];
 
 export function Sidebar() {

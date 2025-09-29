@@ -46,7 +46,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }): JS
     }
   };
 
-  const setupNetworkListener = (): void => {
+  const setupNetworkListener = () => {
     const unsubscribe = NetInfo.addEventListener(state => {
       const wasOffline = !isOnline;
       setIsOnline(state.isConnected ?? false);
@@ -57,7 +57,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }): JS
       }
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   };
 
   const addPendingChange = async (change: any): Promise<void> => {
@@ -79,7 +79,7 @@ export function OfflineProvider({ children }: { children: React.ReactNode }): JS
     try {
       const pendingChanges = await db.getAllAsync('SELECT * FROM pending_changes ORDER BY timestamp ASC');
       
-      for (const change of pendingChanges) {
+      for (const change of pendingChanges as any[]) {
         try {
           // TODO: Implement actual sync logic with API
           await fetch('/api/sync', {

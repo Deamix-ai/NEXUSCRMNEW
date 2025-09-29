@@ -5,14 +5,14 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "dev": "echo 'Database package - no dev server needed'",
+    "dev": "echo 'Database package ready - Use npm run db:studio to open Prisma Studio'",
     "build": "prisma generate",
     "generate": "prisma generate",
     "push": "prisma db push",
     "migrate": "prisma migrate dev",
     "migrate:prod": "prisma migrate deploy",
     "seed": "tsx src/seed.ts",
-    "studio": "prisma studio",
+    "studio": "prisma studio --schema ./schema.prisma",
     "reset": "prisma migrate reset --force"
   },
   "dependencies": {

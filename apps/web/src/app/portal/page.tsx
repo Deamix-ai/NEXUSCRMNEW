@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+
 interface Project {
   id: string;
   title: string;
@@ -110,9 +111,9 @@ export default function CustomerPortalPage() {
             { phase: 'Final Finishing', status: 'pending' }
           ],
           photos: [
-            { id: '1', url: '/api/placeholder/400/300', caption: 'Before renovation', date: '2024-09-01', category: 'before' },
-            { id: '2', url: '/api/placeholder/400/300', caption: 'Demolition complete', date: '2024-09-05', category: 'progress' },
-            { id: '3', url: '/api/placeholder/400/300', caption: 'New plumbing installed', date: '2024-09-10', category: 'progress' }
+            { id: '1', url: '/images/project-before.jpg', caption: 'Before renovation', date: '2024-09-01', category: 'before' },
+            { id: '2', url: '/images/project-demolition.jpg', caption: 'Demolition complete', date: '2024-09-05', category: 'progress' },
+            { id: '3', url: '/images/project-plumbing.jpg', caption: 'New plumbing installed', date: '2024-09-10', category: 'progress' }
           ],
           documents: [
             { id: '1', name: 'Project Quote', type: 'quote', url: '#', date: '2024-08-20' },
@@ -146,7 +147,7 @@ export default function CustomerPortalPage() {
             { phase: 'Final Inspection', status: 'completed', startDate: '2024-07-20', completionDate: '2024-07-20' }
           ],
           photos: [
-            { id: '4', url: '/api/placeholder/400/300', caption: 'Completed backsplash', date: '2024-07-20', category: 'after' }
+            { id: '4', url: '/images/project-after.jpg', caption: 'Completed project', date: '2024-07-20', category: 'after' }
           ],
           documents: [
             { id: '4', name: 'Completion Certificate', type: 'warranty', url: '#', date: '2024-07-20' },

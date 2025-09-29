@@ -6,13 +6,16 @@
     "declarationMap": true,
     "sourceMap": true,
     "composite": true,
-    "incremental": true
+    "incremental": true,
+    "types": ["node"]
   },
   "include": [
     "src/**/*"
   ],
   "exclude": [
     "dist",
-    "node_modules"
+    "node_modules",
+    "**/*.native.ts",
+    "**/*.native.tsx"
   ]
 }

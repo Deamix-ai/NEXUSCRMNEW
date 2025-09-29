@@ -31,6 +31,9 @@ async function bootstrap() {
     }),
   );
 
+  // Set global prefix for API routes
+  app.setGlobalPrefix('api');
+
   // Swagger documentation
   if (nodeEnv !== 'production') {
     const config = new DocumentBuilder()

@@ -1,7 +1,12 @@
 'use client';
 
+import React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
+import { useLogin, useRegister } from '@/hooks/api-hooks';
+
+
 
 interface AuthFormProps {
   mode: 'login' | 'register';
@@ -11,47 +16,47 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
+  const { login: authLogin } = useAuth();
+  
+  // Use React Query hooks
+  const loginMutation = useLogin();
+  const registerMutation = useRegister();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
     try {
-      const endpoint = mode === 'login' ? '/auth/login' : '/auth/register';
-      const body = mode === 'login' 
-        ? { email, password }
-        : { email, password, name, role: 'SALES' };
+      if (mode === 'login') {
+        const result = await loginMutation.mutateAsync({ email, password });
+        // Update auth context with the result
+        await authLogin(email, password);
+      } else {
+        // Handle registration
+        const [firstName, ...lastNameParts] = name.split(' ');
+        const lastName = lastNameParts.join(' ') || '';
+        
+        await registerMutation.mutateAsync({ 
+          email, 
+          password, 
+          firstName, 
+          lastName 
+        });
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Authentication failed');
+        // After successful registration, log in
+        await authLogin(email, password);
       }
-
-      // Store the token
-      localStorage.setItem('auth_token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
 
       // Redirect to dashboard
       router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setLoading(false);
     }
   };
+
+  const loading = loginMutation.isPending || registerMutation.isPending;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">

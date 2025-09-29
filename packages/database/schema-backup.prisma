@@ -1,0 +1,601 @@
+// This is your Prisma schema file for CRM-Nexus
+// Account-centric container architecture: Enquiries → Leads → Projects → Completed Projects
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE CRM ENTITIES - ACCOUNT-CENTRIC ARCHITECTURE
+// ============================================================================
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String?
+  firstName         String
+  lastName          String
+  phone             String?
+  role              UserRole @default(SALES)
+  isActive          Boolean  @default(true)
+  lastLoginAt       DateTime?
+  emailVerifiedAt   DateTime?
+  twoFactorSecret   String?
+  twoFactorEnabled  Boolean  @default(false)
+  avatarUrl         String?
+  timezone          String   @default("Europe/London")
+  preferences       Json     @default("{}")
+  
+  // Audit fields
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?
+  updatedById       String?
+  
+  // Relations
+  createdBy         User?     @relation("UserCreatedBy", fields: [createdById], references: [id])
+  updatedBy         User?     @relation("UserUpdatedBy", fields: [updatedById], references: [id])
+  createdUsers      User[]    @relation("UserCreatedBy")
+  updatedUsers      User[]    @relation("UserUpdatedBy")
+  
+  ownedAccounts     Account[] @relation("AccountOwner")
+  ownedEnquiries    Enquiry[] @relation("EnquiryOwner")
+  ownedLeads        Lead[]    @relation("LeadOwner")
+  ownedProjects     Project[] @relation("ProjectOwner")
+  ownedCompletedProjects CompletedProject[] @relation("CompletedProjectOwner")
+  activities        Activity[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  SALES
+  DESIGNER
+  INSTALLER
+  FINANCE
+}
+
+// ACCOUNT AS CONTAINER - TOP LEVEL RECORD (renamed from Client)
+model Account {
+  id               String       @id @default(cuid())
+  orgId            String?      // tenant-ready for multi-location
+  name             String
+  legalName        String?
+  emails           String[]     // primary goes in Contacts; array for search aid
+  phones           String[]
+  billingAddress   Json?
+  siteAddresses    Json?        // optional multiple sites
+  ownerId          String
+  owner            User         @relation("AccountOwner", fields: [ownerId], references: [id])
+  tags             String[]
+  status           AccountStatus @default(ACTIVE)
+  portalToken      String       @unique @default(cuid())
+  designFeePaid    Boolean      @default(false)
+  consentMarketing Boolean      @default(false)
+
+  // Pipeline entities: Enquiries → Leads → Projects → Completed Projects
+  enquiries        Enquiry[]
+  leads            Lead[]
+  projects         Project[]
+  completedProjects CompletedProject[]
+  
+  // Supporting entities
+  contacts         Contact[]
+  rooms            Room[]
+  activities       Activity[]
+  tasks            Task[]
+  appointments     Appointment[]
+  documents        Document[]
+  snags            Snag[]
+  events           EventLog[]
+
+  // Audit fields
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?    // soft delete
+  createdById      String?
+  updatedById      String?
+
+  @@index([name])
+  @@index([ownerId])
+  @@index([status])
+  @@index([portalToken])
+  @@map("accounts")
+}
+
+enum AccountStatus { 
+  ACTIVE 
+  ARCHIVED 
+}
+
+// ENQUIRY - Initial contact/interest (NEW)
+model Enquiry {
+  id                String       @id @default(cuid())
+  title             String
+  description       String?
+  status            EnquiryStatus @default(NEW)
+  priority          Priority     @default(MEDIUM)
+  source            String?
+  campaign          String?
+  medium            String?
+  estimatedValue    Decimal?     @db.Decimal(10, 2)
+  contactMethod     String?
+  firstName         String
+  lastName          String
+  email             String?
+  phone             String?
+  mobile            String?
+  company           String?
+  message           String?
+  accountId         String?
+  ownerId           String
+  leadId            String?      @unique
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  createdById       String?
+  updatedById       String?
+  activities        Activity[]
+  account           Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  lead              Lead?        @relation("EnquiryLead", fields: [leadId], references: [id])
+  owner             User         @relation("EnquiryOwner", fields: [ownerId], references: [id])
+  tasks             Task[]
+
+  @@map("enquiries")
+}
+
+enum EnquiryStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  REJECTED
+  NURTURING
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  name      String
+  role      String?
+  email     String?
+  phone     String?
+  isPrimary Boolean  @default(false)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([email])
+  @@index([phone])
+  @@map("contacts")
+}
+
+// PROJECT/ROOM - SCOPED WORKSPACE UNDER ACCOUNT
+model Room {
+  id                  String             @id @default(cuid())
+  accountId           String
+  account             Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type                RoomType
+  nickname            String
+  pipelineStageId     String?
+  stage               PipelineStage?     @relation(fields: [pipelineStageId], references: [id])
+  budgetLow           Int?
+  budgetHigh          Int?
+  siteAddress         Json?
+  status              RoomStatus         @default(ACTIVE)
+
+  tasks           Task[]
+  appointments    Appointment[]
+  documents       Document[]
+  designVersions  DesignVersion[]
+  parsedSpecItems ParsedSpecItem[]
+  forms           FormSubmission[]
+  snags           Snag[]
+
+  // Audit fields
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?  // soft delete
+
+  @@index([accountId])
+  @@index([status])
+  @@index([pipelineStageId])
+  @@map("rooms")
+}
+
+enum RoomType { 
+  KITCHEN 
+  BATHROOM 
+  CLOAKROOM 
+  OTHER 
+}
+
+enum RoomStatus { 
+  ACTIVE 
+  WON 
+  LOST 
+  ONHOLD 
+  COMPLETED 
+}
+
+model Project {
+  id                    String         @id @default(cuid())
+  accountId             String
+  account               Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  roomId                String?        @unique
+  room                  Room?          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  stageId               String
+  stage                 PipelineStage  @relation("ProjectStage", fields: [stageId], references: [id])
+  ownerId               String
+  owner                 User           @relation("ProjectOwner", fields: [ownerId], references: [id])
+  amountGrossIncVat     Int
+  vatRate               Float          @default(0.2)
+  probability           Int            @default(50)
+  source                String?
+  utm                   Json?
+  leadId                String?        @unique
+  lead                  Lead?          @relation("LeadProject", fields: [leadId], references: [id])
+  completedProjectId    String?        @unique
+  completedProject      CompletedProject? @relation("ProjectToCompletedProject", fields: [completedProjectId], references: [id])
+  
+  activities          Activity[]
+  tasks               Task[]
+  documents           Document[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([roomId])
+  @@index([stageId])
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model PipelineStage {
+  id       String    @id @default(cuid())
+  name     String
+  order    Int
+  slaHours Int?
+  
+  rooms    Room[]
+  projects Project[] @relation("ProjectStage")
+
+  @@map("pipeline_stages")
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  accountId   String
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  roomId      String?
+  room        Room?        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  enquiryId   String?
+  enquiry     Enquiry?     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  leadId      String?
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  projectId   String?
+  project     Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
+  type        ActivityType
+  threadKey   String?      // for conversation threading
+  summary     String?
+  body        String?
+  attachments Json?
+  durations   Json?
+  metadata    Json?
+  occurredAt  DateTime     @default(now())
+  createdAt   DateTime     @default(now())
+
+  @@index([accountId, occurredAt])
+  @@index([roomId, occurredAt])
+  @@index([threadKey])
+  @@map("activities")
+}
+
+enum ActivityType { 
+  NOTE 
+  CALL 
+  EMAIL 
+  SMS 
+  MEETING 
+  VOICEMAIL 
+  SIGNATURE 
+  UPLOAD 
+  FORM 
+  SYSTEM 
+}
+
+model Task {
+  id            String     @id @default(cuid())
+  accountId     String
+  account       Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId     String?
+  project       Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assigneeId    String?
+  assignee      User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  title         String
+  dueAt         DateTime?
+  priority      Int        @default(0)
+  status        TaskStatus @default(OPEN)
+  autoGenerated Boolean    @default(false)
+  
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([accountId])
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([status, dueAt])
+  @@map("tasks")
+}
+
+enum TaskStatus { 
+  OPEN 
+  DONE 
+  CANCELLED 
+}
+
+model Appointment {
+  id           String          @id @default(cuid())
+  accountId    String
+  account      Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId    String?
+  project      Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type         AppointmentType
+  start        DateTime
+  end          DateTime
+  location     String?
+  participants Json?
+  status       String?
+  
+  createdAt    DateTime        @default(now())
+
+  @@index([accountId, start])
+  @@index([projectId, start])
+  @@map("appointments")
+}
+
+enum AppointmentType { 
+  CONSULT 
+  SURVEY 
+  PRESENTATION 
+  INSTALL 
+  AFTERCARE 
+}
+
+model Document {
+  id              String      @id @default(cuid())
+  accountId       String
+  account         Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId       String?
+  project         Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category        DocCategory
+  url             String
+  thumbUrl        String?
+  size            Int?
+  labels          String[]
+  capturedAt      DateTime?
+  capturedBy      String?
+  clientVisible   Boolean     @default(false)
+  clientWatermark Boolean     @default(false)
+  
+  createdAt       DateTime    @default(now())
+
+  @@index([accountId])
+  @@index([projectId])
+  @@index([category])
+  @@map("documents")
+}
+
+enum DocCategory { 
+  DRAWING 
+  SURVEY_PACK 
+  PRODUCT_LIST 
+  CONTRACT 
+  PHOTO 
+  CERTIFICATE 
+  RENDER 
+  OTHER 
+}
+
+model DesignVersion {
+  id            String  @id @default(cuid())
+  clientId      String
+  roomId        String
+  room          Room    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  version       Int
+  notes         String?
+  assets        Json    // list of Document ids or URLs (renders/plans)
+  finalApproved Boolean @default(false)
+  
+  createdAt     DateTime @default(now())
+
+  @@unique([roomId, version])
+  @@map("design_versions")
+}
+
+model ParsedSpecItem {
+  id          String     @id @default(cuid())
+  clientId    String
+  roomId      String
+  room        Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  specVersion Int
+  lineNo      Int
+  brand       String?
+  description String
+  finish      String?
+  qty         Float?
+  unitPrice   Int?       // in pence
+  totalPrice  Int?
+  status      SpecStatus @default(PENDING)
+  note        String?
+  isCritical  Boolean    @default(false)
+  
+  createdAt   DateTime   @default(now())
+
+  @@index([clientId, roomId, specVersion])
+  @@map("parsed_spec_items")
+}
+
+enum SpecStatus { 
+  PENDING 
+  ORDERED 
+  DELIVERED 
+  ONSITE 
+}
+
+model Snag {
+  id            String     @id @default(cuid())
+  accountId     String
+  account       Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId     String
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title         String
+  description   String?
+  status        SnagStatus @default(OPEN)
+  assigneeId    String?
+  dueAt         DateTime?
+  clientVisible Boolean    @default(false)
+  photos        Json?
+  
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([accountId, status])
+  @@index([projectId, status])
+  @@map("snags")
+}
+
+enum SnagStatus { 
+  OPEN 
+  RESOLVED 
+}
+
+model CompletedProject {
+  id          String                  @id @default(cuid())
+  accountId   String
+  account     Account                 @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId   String?                 @unique
+  project     Project?                @relation("ProjectToCompletedProject", fields: [projectId], references: [id])
+  ownerId     String
+  owner       User                    @relation("CompletedProjectOwner", fields: [ownerId], references: [id])
+  title       String
+  description String?
+  status      CompletedProjectStatus  @default(SCHEDULED)
+  startDate   DateTime?
+  endDate     DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([accountId])
+  @@index([projectId])
+  @@index([status])
+  @@map("completed_projects")
+}
+
+enum CompletedProjectStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model FormSubmission {
+  id         String   @id @default(cuid())
+  projectId  String?
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  formType   String
+  data       Json
+  submittedAt DateTime @default(now())
+
+  @@index([projectId])
+  @@map("form_submissions")
+}
+
+model EventLog {
+  id        String   @id @default(cuid())
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  projectId String?
+  actorId   String?
+  entity    String
+  entityId  String
+  action    String
+  before    Json?
+  after     Json?
+  
+  createdAt DateTime @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([projectId, createdAt])
+  @@map("event_logs")
+}
+
+// Additional models for comprehensive CRM functionality
+
+model Lead {
+  id                String     @id @default(cuid())
+  title             String
+  description       String?
+  status            LeadStatus @default(NEW)
+  priority          Priority   @default(MEDIUM)
+  estimatedValue    Decimal?   @db.Decimal(10,2)
+  probability       Int        @default(50)
+  expectedCloseDate DateTime?
+  source            String?
+  campaign          String?
+  medium            String?
+  firstResponseAt   DateTime?
+  responseTime      Int?
+  
+  accountId         String
+  account           Account    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  ownerId           String
+  owner             User       @relation("LeadOwner", fields: [ownerId], references: [id])
+  
+  enquiryId         String?    @unique
+  enquiry           Enquiry?   @relation("EnquiryLead", fields: [enquiryId], references: [id])
+  projectId         String?    @unique
+  project           Project?   @relation("LeadProject", fields: [projectId], references: [id])
+  
+  activities        Activity[]
+  tasks             Task[]
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  createdById       String?
+  updatedById       String?
+
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  NEGOTIATING
+  WON
+  LOST
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+

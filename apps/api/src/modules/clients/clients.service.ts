@@ -1,64 +1,71 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateClientDto, UpdateClientDto, ClientType } from './dto/client.dto';
 import { Prisma } from '@crm/database/generated';
+
+interface FindAllClientsOptions {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+interface FindClientRoomsOptions {
+  page?: number;
+  limit?: number;
+}
 
 @Injectable()
 export class ClientsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createClientDto: CreateClientDto) {
-    return this.prisma.client.create({
-      data: {
-        ...createClientDto,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-      include: {
-        owner: true,
-        contacts: true,
-      },
-    });
-  }
+  async findAll(options: FindAllClientsOptions = {}) {
+    const { page = 1, limit = 10, search } = options;
+    const skip = (page - 1) * limit;
 
-  async findAll(query?: {
-    clientType?: ClientType;
-    ownerId?: string;
-    search?: string;
-    page?: number;
-    limit?: number;
-  }) {
-    const { clientType, ownerId, search, page = 1, limit = 10 } = query || {};
-    
-    const where: Prisma.ClientWhereInput = {};
-    
-    if (clientType) where.clientType = clientType;
-    if (ownerId) where.ownerId = ownerId;
-    if (search) {
-      where.OR = [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { companyName: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-      ];
-    }
+    const where: Prisma.AccountWhereInput = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { legalName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { emails: { has: search } },
+          ],
+        }
+      : {};
 
     const [clients, total] = await Promise.all([
-      this.prisma.client.findMany({
+      this.prisma.account.findMany({
         where,
-        include: {
-          owner: true,
-          contacts: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
+        skip,
         take: limit,
+        include: {
+          contacts: {
+            where: { isPrimary: true },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+              role: true,
+              isPrimary: true,
+            },
+          },
+          _count: {
+            select: {
+              contacts: true,
+              projects: true,
+              leads: true,
+              enquiries: true,
+              activities: true,
+              documents: true,
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
       }),
-      this.prisma.client.count({ where }),
+      this.prisma.account.count({ where }),
     ]);
 
     return {
-      clients,
+      clients: clients.map(this.mapAccountToClient),
       total,
       page,
       limit,
@@ -67,57 +74,189 @@ export class ClientsService {
   }
 
   async findOne(id: string) {
-    return this.prisma.client.findUnique({
+    const account = await this.prisma.account.findUnique({
       where: { id },
       include: {
-        owner: true,
-        contacts: true,
-        leads: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
+        contacts: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            role: true,
+            isPrimary: true,
+          },
         },
-        deals: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
+        projects: {
+          select: {
+            id: true,
+            title: true,
+            type: true,
+            status: true,
+            amountGrossIncVat: true,
+            _count: {
+              select: {
+                tasks: true,
+              },
+            },
+          },
+          orderBy: { updatedAt: 'desc' },
         },
-        jobs: {
+        activities: {
+          take: 10,
+          select: {
+            id: true,
+            type: true,
+            summary: true,
+            body: true,
+            createdAt: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
           orderBy: { createdAt: 'desc' },
-          take: 5,
+        },
+        _count: {
+          select: {
+            contacts: true,
+            projects: true,
+            leads: true,
+            enquiries: true,
+            activities: true,
+            documents: true,
+          },
         },
       },
     });
+
+    if (!account) {
+      throw new NotFoundException(`Client with ID ${id} not found`);
+    }
+
+    return this.mapAccountToClientDetails(account);
   }
 
-  async update(id: string, updateClientDto: UpdateClientDto) {
-    return this.prisma.client.update({
-      where: { id },
-      data: {
-        ...updateClientDto,
-        updatedAt: new Date(),
-      },
-      include: {
-        owner: true,
-        contacts: true,
-      },
+  async getClientRooms(clientId: string, options: FindClientRoomsOptions = {}) {
+    const { page = 1, limit = 10 } = options;
+    const skip = (page - 1) * limit;
+
+    // First verify the client exists
+    const account = await this.prisma.account.findUnique({
+      where: { id: clientId },
     });
-  }
 
-  async remove(id: string) {
-    return this.prisma.client.delete({
-      where: { id },
-    });
-  }
+    if (!account) {
+      throw new NotFoundException(`Client with ID ${clientId} not found`);
+    }
 
-  async getStats(userId?: string) {
-    const where: Prisma.ClientWhereInput = userId ? { ownerId: userId } : {};
-    
-    const [total, residential, commercial, trade] = await Promise.all([
-      this.prisma.client.count({ where }),
-      this.prisma.client.count({ where: { ...where, clientType: ClientType.RESIDENTIAL } }),
-      this.prisma.client.count({ where: { ...where, clientType: ClientType.COMMERCIAL } }),
-      this.prisma.client.count({ where: { ...where, clientType: ClientType.TRADE } }),
+    // Get projects (mapped as rooms)
+    const [projects, total] = await Promise.all([
+      this.prisma.project.findMany({
+        where: { accountId: clientId },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          type: true,
+          status: true,
+          amountGrossIncVat: true,
+          _count: {
+            select: {
+              tasks: true,
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.project.count({
+        where: { accountId: clientId },
+      }),
     ]);
 
-    return { total, residential, commercial, trade };
+    return {
+      rooms: projects.map(this.mapProjectToRoom),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  private mapAccountToClient(account: any) {
+    return {
+      id: account.id,
+      name: account.name,
+      legalName: account.legalName,
+      emails: account.emails,
+      phones: account.phones,
+      status: account.status,
+      tags: account.tags,
+      contacts: account.contacts,
+      _count: {
+        contacts: account._count.contacts,
+        rooms: account._count.projects, // Map projects to rooms
+        leads: account._count.leads,
+        deals: account._count.enquiries, // Map enquiries to deals
+        jobs: account._count.projects, // Map projects to jobs
+        activities: account._count.activities,
+        documents: account._count.documents,
+      },
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+    };
+  }
+
+  private mapAccountToClientDetails(account: any) {
+    return {
+      id: account.id,
+      name: account.name,
+      legalName: account.legalName,
+      emails: account.emails,
+      phones: account.phones,
+      status: account.status,
+      tags: account.tags,
+      billingAddress: account.billingAddress,
+      siteAddresses: account.siteAddresses,
+      contacts: account.contacts,
+      rooms: account.projects.map(this.mapProjectToRoom), // Map projects to rooms
+      activities: account.activities.map((activity: any) => ({
+        id: activity.id,
+        type: activity.type,
+        title: activity.summary, // Map summary to title
+        description: activity.body, // Map body to description
+        createdAt: activity.createdAt,
+        user: activity.user,
+      })),
+      _count: {
+        contacts: account._count.contacts,
+        rooms: account._count.projects,
+        leads: account._count.leads,
+        deals: account._count.enquiries,
+        jobs: account._count.projects,
+        activities: account._count.activities,
+        documents: account._count.documents,
+      },
+      createdAt: account.createdAt,
+      updatedAt: account.updatedAt,
+    };
+  }
+
+  private mapProjectToRoom(project: any) {
+    return {
+      id: project.id,
+      name: project.title,
+      type: project.type,
+      jobs: [], // Projects are mapped as rooms, but jobs would be tasks/subtasks
+      _count: {
+        jobs: project._count?.tasks || 0,
+      },
+      status: project.status,
+      quotedValue: project.amountGrossIncVat ? project.amountGrossIncVat / 100 : null, // Convert from pence to pounds
+    };
   }
 }

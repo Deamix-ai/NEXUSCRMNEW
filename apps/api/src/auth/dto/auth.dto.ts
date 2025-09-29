@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength, IsEnum, IsOptional } from 'class-validator';
-import { UserRole } from '@crm/shared';
+import { UserRole } from '@crm/database/generated';
 
 export class LoginDto {
   @ApiProperty({ example: 'user@bowmanskb.co.uk' })

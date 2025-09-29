@@ -1,0 +1,10 @@
+{
+  "extends": ["@repo/eslint-config/base"],
+  "parserOptions": {
+    "project": "./tsconfig.json"
+  },
+  "env": {
+    "node": true
+  },
+  "ignorePatterns": ["dist/", "node_modules/", "*.config.js"]
+}

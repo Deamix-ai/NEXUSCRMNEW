@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { DashboardLayout } from '@/components/layout/dashboard-layout';
+
 
 interface EmailTemplate {
   id: string;
@@ -182,7 +184,8 @@ The Bowmans Team`,
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <DashboardLayout>
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -552,7 +555,8 @@ The Bowmans Team`,
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </DashboardLayout>
   );
 };
 

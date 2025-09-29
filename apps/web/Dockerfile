@@ -1,33 +1,72 @@
-# Stage 1: Dependencies
-FROM node:18-alpine AS deps
+# Multi-stage build for Next.js production optimization
+FROM node:18-alpine AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+RUN apk add --no-cache libc6-compat curl
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
-COPY turbo.json ./
-COPY apps/web/package*.json ./apps/web/
-COPY packages/shared/package*.json ./packages/shared/
-COPY packages/ui/package*.json ./packages/ui/
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install dependencies based on the preferred package manager
+RUN \
+  if [ -f yarn.lock ]; then yarn --frozen-lockfile; \
+  elif [ -f package-lock.json ]; then npm ci; \
+  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm i --frozen-lockfile; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
 
-# Stage 2: Builder
-FROM node:18-alpine AS builder
+# Rebuild the source code only when needed
+FROM base AS builder
 WORKDIR /app
-
-# Copy source code and dependencies
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Set build environment
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+# Build the web application
+ENV NEXT_TELEMETRY_DISABLED 1
 
-# Build the application
-RUN npm run build --workspace=@crm/web
+RUN \
+  if [ -f yarn.lock ]; then yarn build:web; \
+  elif [ -f package-lock.json ]; then npm run build:web; \
+  elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm build:web; \
+  else echo "Lockfile not found." && exit 1; \
+  fi
 
-# Stage 3: Production
+# Production image
+FROM base AS production
+WORKDIR /app
+
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+
+# Copy the Next.js build
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Set correct permissions
+RUN chown -R nextjs:nodejs /app
+USER nextjs
+
+EXPOSE 3000
+
+ENV PORT 3000
+ENV HOSTNAME "0.0.0.0"
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+CMD ["node", "apps/web/server.js"]
 FROM node:18-alpine AS runner
 WORKDIR /app
 
@@ -43,15 +82,8 @@ COPY --from=builder /app/apps/web/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
 
-# Switch to non-root user
-USER nextjs
-
-# Expose port
-EXPOSE 3000
-
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
-# Start the application
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

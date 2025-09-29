@@ -70,11 +70,12 @@ export class CreateLeadDto {
 
   @ApiProperty()
   @IsString()
-  clientId: string;
+  accountId: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
-  ownerId: string;
+  ownerId?: string;
 }
 
 export class UpdateLeadDto {
@@ -131,10 +132,39 @@ export class UpdateLeadDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  clientId?: string;
+  accountId?: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   ownerId?: string;
+}
+
+export class ConvertLeadToProjectDto {
+  @ApiProperty()
+  @IsString()
+  title: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiProperty()
+  @IsNumber()
+  value: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsNumber()
+  probability?: number;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsDateString()
+  expectedCloseDate?: string;
+
+  @ApiProperty()
+  @IsString()
+  stageId: string;
 }

@@ -1,7 +1,10 @@
 'use client';
 
+import React from 'react';
 import { useState } from 'react';
 import { Job } from '@/contexts/CRMContext';
+
+
 
 interface AddJobModalProps {
   isOpen: boolean;
@@ -12,7 +15,7 @@ interface AddJobModalProps {
 export function AddJobModal({ isOpen, onClose, onSubmit }: AddJobModalProps) {
   const [formData, setFormData] = useState({
     title: '',
-    clientId: '',
+    accountId: '',
     clientName: '',
     status: 'PLANNING' as const,
     priority: 'MEDIUM' as const,
@@ -30,7 +33,7 @@ export function AddJobModal({ isOpen, onClose, onSubmit }: AddJobModalProps) {
     onSubmit(formData);
     setFormData({
       title: '',
-      clientId: '',
+      accountId: '',
       clientName: '',
       status: 'PLANNING',
       priority: 'MEDIUM',
@@ -59,11 +62,11 @@ export function AddJobModal({ isOpen, onClose, onSubmit }: AddJobModalProps) {
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-10 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white max-h-screen overflow-y-auto">
         <div className="mt-3">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Job</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Add New Project</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-                Job Title *
+                Project Title *
               </label>
               <input
                 type="text"
@@ -77,8 +80,8 @@ export function AddJobModal({ isOpen, onClose, onSubmit }: AddJobModalProps) {
             </div>
 
             <div>
-              <label htmlFor="clientName" className="block text-sm font-medium text-gray-700">
-                Client Name *
+                            <label htmlFor="clientName" className="block text-sm font-medium text-gray-700">
+                Account Name
               </label>
               <input
                 type="text"
@@ -215,7 +218,7 @@ export function AddJobModal({ isOpen, onClose, onSubmit }: AddJobModalProps) {
                 type="submit"
                 className="rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
               >
-                Add Job
+                Add Project
               </button>
             </div>
           </form>

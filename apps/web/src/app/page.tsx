@@ -1,4 +1,6 @@
 import { Metadata } from 'next';
+import Link from 'next/link';
+
 
 export const metadata: Metadata = {
   title: 'Dashboard - CRM Nexus',
@@ -21,6 +23,21 @@ export default function HomePage() {
             </div>
           </header>
           
+          {/* Dashboard Navigation Button */}
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6">
+            <div className="text-center">
+              <Link 
+                href="/dashboard"
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Go to Dashboard
+              </Link>
+            </div>
+          </div>
+          
           <main>
             <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
               <div className="px-4 py-8 sm:px-0">
@@ -40,7 +57,7 @@ export default function HomePage() {
                         <div className="ml-5 w-0 flex-1">
                           <dl>
                             <dt className="text-sm font-medium text-gray-500 truncate">
-                              Total Clients
+                              Total Accounts
                             </dt>
                             <dd className="text-lg font-medium text-gray-900">
                               Loading...
@@ -64,7 +81,7 @@ export default function HomePage() {
                         <div className="ml-5 w-0 flex-1">
                           <dl>
                             <dt className="text-sm font-medium text-gray-500 truncate">
-                              Active Jobs
+                              Active Projects
                             </dt>
                             <dd className="text-lg font-medium text-gray-900">
                               Loading...

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
+
 // Types
 export interface Lead {
   id: string;
@@ -9,7 +10,7 @@ export interface Lead {
   email: string;
   phone: string;
   company?: string;
-  status: 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL' | 'WON' | 'LOST';
+  status: 'NEW' | 'CONTACTED' | 'QUALIFIED' | 'PROPOSAL_SENT' | 'NEGOTIATING' | 'WON' | 'LOST';
   source: string;
   value: number;
   projectType: string;
@@ -20,7 +21,7 @@ export interface Lead {
   assignedTo: string;
 }
 
-export interface Client {
+export interface Account {
   id: string;
   name: string;
   email: string;
@@ -34,10 +35,10 @@ export interface Client {
   lastContact: string;
 }
 
-export interface Job {
+export interface Project {
   id: string;
   title: string;
-  clientId: string;
+  accountId: string;
   clientName: string;
   status: 'PLANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'ON_HOLD';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -50,6 +51,9 @@ export interface Job {
   progress: number;
 }
 
+// Backward compatibility
+export type Job = Project;
+
 // Context interface
 interface CRMContextType {
   // Leads
@@ -58,30 +62,30 @@ interface CRMContextType {
   updateLead: (id: string, updates: Partial<Lead>) => void;
   deleteLead: (id: string) => void;
   
-  // Clients
-  clients: Client[];
-  addClient: (client: Omit<Client, 'id' | 'createdAt'>) => void;
-  updateClient: (id: string, updates: Partial<Client>) => void;
-  deleteClient: (id: string) => void;
+  // Accounts
+  accounts: Account[];
+  addAccount: (account: Omit<Account, 'id' | 'createdAt'>) => void;
+  updateAccount: (id: string, updates: Partial<Account>) => void;
+  deleteAccount: (id: string) => void;
   
-  // Jobs
-  jobs: Job[];
-  addJob: (job: Omit<Job, 'id'>) => void;
-  updateJob: (id: string, updates: Partial<Job>) => void;
-  deleteJob: (id: string) => void;
+  // Projects
+  projects: Project[];
+  addProject: (project: Omit<Project, 'id'>) => void;
+  updateProject: (id: string, updates: Partial<Project>) => void;
+  deleteProject: (id: string) => void;
   
   // Stats
   stats: {
     totalLeads: number;
-    totalClients: number;
-    totalJobs: number;
+    totalAccounts: number;
+    totalProjects: number;
     totalValue: number;
     conversionRate: number;
   };
   getStats: () => {
     totalLeads: number;
-    totalClients: number;
-    totalJobs: number;
+    totalAccounts: number;
+    totalProjects: number;
     totalValue: number;
     conversionRate: number;
   };
@@ -140,7 +144,7 @@ const initialLeads: Lead[] = [
   },
 ];
 
-const initialClients: Client[] = [
+const initialAccounts: Account[] = [
   {
     id: '1',
     name: 'John Williams',
@@ -168,11 +172,11 @@ const initialClients: Client[] = [
   },
 ];
 
-const initialJobs: Job[] = [
+const initialProjects: Project[] = [
   {
     id: '1',
     title: 'Modern Kitchen Installation',
-    clientId: '1',
+    accountId: '1',
     clientName: 'John Williams',
     status: 'IN_PROGRESS',
     priority: 'HIGH',
@@ -187,7 +191,7 @@ const initialJobs: Job[] = [
   {
     id: '2',
     title: 'Bathroom Suite Upgrade',
-    clientId: '2',
+    accountId: '2',
     clientName: 'Emma Brown',
     status: 'PLANNING',
     priority: 'MEDIUM',
@@ -203,18 +207,18 @@ const initialJobs: Job[] = [
 
 export function CRMProvider({ children }: { children: ReactNode }) {
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   // Load data from localStorage on mount
   useEffect(() => {
     const savedLeads = localStorage.getItem('crm-leads');
-    const savedClients = localStorage.getItem('crm-clients');
-    const savedJobs = localStorage.getItem('crm-jobs');
+    const savedAccounts = localStorage.getItem('crm-accounts');
+    const savedProjects = localStorage.getItem('crm-projects');
 
     setLeads(savedLeads ? JSON.parse(savedLeads) : initialLeads);
-    setClients(savedClients ? JSON.parse(savedClients) : initialClients);
-    setJobs(savedJobs ? JSON.parse(savedJobs) : initialJobs);
+    setAccounts(savedAccounts ? JSON.parse(savedAccounts) : initialAccounts);
+    setProjects(savedProjects ? JSON.parse(savedProjects) : initialProjects);
   }, []);
 
   // Save to localStorage whenever data changes
@@ -225,16 +229,16 @@ export function CRMProvider({ children }: { children: ReactNode }) {
   }, [leads]);
 
   useEffect(() => {
-    if (clients.length > 0) {
-      localStorage.setItem('crm-clients', JSON.stringify(clients));
+    if (accounts.length > 0) {
+      localStorage.setItem('crm-accounts', JSON.stringify(accounts));
     }
-  }, [clients]);
+  }, [accounts]);
 
   useEffect(() => {
-    if (jobs.length > 0) {
-      localStorage.setItem('crm-jobs', JSON.stringify(jobs));
+    if (projects.length > 0) {
+      localStorage.setItem('crm-projects', JSON.stringify(projects));
     }
-  }, [jobs]);
+  }, [projects]);
 
   // Lead functions
   const addLead = (leadData: Omit<Lead, 'id' | 'createdAt'>) => {
@@ -256,58 +260,58 @@ export function CRMProvider({ children }: { children: ReactNode }) {
     setLeads(prev => prev.filter(lead => lead.id !== id));
   };
 
-  // Client functions
-  const addClient = (clientData: Omit<Client, 'id' | 'createdAt'>) => {
-    const newClient: Client = {
-      ...clientData,
+  // Account functions
+  const addAccount = (accountData: Omit<Account, 'id' | 'createdAt'>) => {
+    const newAccount: Account = {
+      ...accountData,
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
     };
-    setClients(prev => [newClient, ...prev]);
+    setAccounts(prev => [newAccount, ...prev]);
   };
 
-  const updateClient = (id: string, updates: Partial<Client>) => {
-    setClients(prev => prev.map(client => 
-      client.id === id ? { ...client, ...updates } : client
+  const updateAccount = (id: string, updates: Partial<Account>) => {
+    setAccounts(prev => prev.map(account => 
+      account.id === id ? { ...account, ...updates } : account
     ));
   };
 
-  const deleteClient = (id: string) => {
-    setClients(prev => prev.filter(client => client.id !== id));
+  const deleteAccount = (id: string) => {
+    setAccounts(prev => prev.filter(account => account.id !== id));
   };
 
   // Job functions
-  const addJob = (jobData: Omit<Job, 'id'>) => {
-    const newJob: Job = {
-      ...jobData,
+  const addProject = (projectData: Omit<Project, "id">) => {
+    const newProject: Project = {
+      ...projectData,
       id: Date.now().toString(),
     };
-    setJobs(prev => [newJob, ...prev]);
+    setProjects(prev => [newProject, ...prev]);
   };
 
-  const updateJob = (id: string, updates: Partial<Job>) => {
-    setJobs(prev => prev.map(job => 
+  const updateProject = (id: string, updates: Partial<Project>) => {
+    setProjects(prev => prev.map(job => 
       job.id === id ? { ...job, ...updates } : job
     ));
   };
 
-  const deleteJob = (id: string) => {
-    setJobs(prev => prev.filter(job => job.id !== id));
+  const deleteProject = (id: string) => {
+    setProjects(prev => prev.filter(job => job.id !== id));
   };
 
   // Stats function
   const getStats = () => {
     const totalLeads = leads.length;
-    const totalClients = clients.length;
-    const totalJobs = jobs.length;
-    const totalValue = jobs.reduce((sum, job) => sum + job.value, 0);
+    const totalAccounts = accounts.length;
+    const totalProjects = projects.length;
+    const totalValue = projects.reduce((sum, project) => sum + project.value, 0);
     const wonLeads = leads.filter(lead => lead.status === 'WON').length;
     const conversionRate = totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0;
 
     return {
       totalLeads,
-      totalClients,
-      totalJobs,
+      totalAccounts,
+      totalProjects,
       totalValue,
       conversionRate,
     };
@@ -318,20 +322,23 @@ export function CRMProvider({ children }: { children: ReactNode }) {
     addLead,
     updateLead,
     deleteLead,
-    clients,
-    addClient,
-    updateClient,
-    deleteClient,
-    jobs,
-    addJob,
-    updateJob,
-    deleteJob,
+    accounts,
+    addAccount,
+    updateAccount,
+    deleteAccount,
+    projects,
+    addProject,
+    updateProject,
+    deleteProject,
     stats: getStats(),
     getStats,
   };
 
   return <CRMContext.Provider value={value}>{children}</CRMContext.Provider>;
 }
+
+// Backward compatibility - alias Account as Client for existing code
+export type Client = Account;
 
 export function useCRM() {
   const context = useContext(CRMContext);
